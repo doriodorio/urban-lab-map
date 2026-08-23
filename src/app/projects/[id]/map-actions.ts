@@ -114,6 +114,25 @@ export async function createItem(
   return { success: true };
 }
 
+export async function updateItemLayer(
+  projectId: string,
+  itemId: string,
+  layerId: string | null
+) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("items")
+    .update({ layer_id: layerId })
+    .eq("id", itemId);
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  revalidatePath(`/projects/${projectId}`);
+  return { success: true };
+}
+
 export async function deleteItem(projectId: string, itemId: string) {
   const supabase = await createClient();
   const { error } = await supabase.from("items").delete().eq("id", itemId);

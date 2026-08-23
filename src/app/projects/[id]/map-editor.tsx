@@ -5,6 +5,7 @@ import { useActionState } from "react";
 import Link from "next/link";
 import * as maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
+import { gps as exifGps } from "exifr";
 
 type Layer = { id: string; name: string; color: string | null };
 type Item = {
@@ -52,6 +53,7 @@ export function MapEditor({
   deleteLayerAction,
   createItemAction,
   deleteItemAction,
+  updateItemLayerAction,
   setBaseMapAction,
   clearBaseMapAction,
 }: {
@@ -62,6 +64,10 @@ export function MapEditor({
   deleteLayerAction: (layerId: string) => Promise<ActionResult>;
   createItemAction: BoundAction;
   deleteItemAction: (itemId: string) => Promise<ActionResult>;
+  updateItemLayerAction: (
+    itemId: string,
+    layerId: string | null
+  ) => Promise<ActionResult>;
   setBaseMapAction: BoundAction;
   clearBaseMapAction: () => Promise<ActionResult>;
 }) {
@@ -300,6 +306,7 @@ export function MapEditor({
         {pendingCoords && (
           <NewItemForm
             coords={pendingCoords}
+            onCoordsChange={setPendingCoords}
             layers={layers}
             createItemAction={createItemAction}
             onDone={() => setPendingCoords(null)}
@@ -310,10 +317,9 @@ export function MapEditor({
         {selectedItem && (
           <ItemDetail
             item={selectedItem}
-            layerName={
-              layers.find((l) => l.id === selectedItem.layer_id)?.name ?? null
-            }
+            layers={layers}
             deleteItemAction={deleteItemAction}
+            updateItemLayerAction={updateItemLayerAction}
             onClose={() => setSelectedItem(null)}
           />
         )}
@@ -405,12 +411,14 @@ function LayerPanel({
 
 function NewItemForm({
   coords,
+  onCoordsChange,
   layers,
   createItemAction,
   onDone,
   onCancel,
 }: {
   coords: [number, number];
+  onCoordsChange: (coords: [number, number]) => void;
   layers: Layer[];
   createItemAction: BoundAction;
   onDone: () => void;
@@ -422,6 +430,33 @@ function NewItemForm({
     return result;
   };
   const [state, formAction, pending] = useActionState(wrappedAction, {});
+  const [photoCoords, setPhotoCoords] = useState<[number, number] | null>(
+    null
+  );
+  const [checkingExif, setCheckingExif] = useState(false);
+  const [exifChecked, setExifChecked] = useState(false);
+
+  async function handleImageChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    setPhotoCoords(null);
+    setExifChecked(false);
+    if (!file) return;
+
+    setCheckingExif(true);
+    try {
+      const gps = await exifGps(file);
+      if (gps) setPhotoCoords([gps.longitude, gps.latitude]);
+    } catch {
+      // No GPS data, or not a format exifr can read.
+    } finally {
+      setCheckingExif(false);
+      setExifChecked(true);
+    }
+  }
+
+  const photoCoordsDiffer =
+    photoCoords &&
+    (photoCoords[0] !== coords[0] || photoCoords[1] !== coords[1]);
 
   return (
     <form
@@ -459,7 +494,36 @@ function NewItemForm({
           </option>
         ))}
       </select>
-      <input type="file" name="image" accept="image/*" className="text-sm" />
+      <input
+        type="file"
+        name="image"
+        accept="image/*"
+        className="text-sm"
+        onChange={handleImageChange}
+      />
+      {checkingExif && (
+        <p className="text-xs text-neutral-400">Checking photo for GPS data…</p>
+      )}
+      {exifChecked && !checkingExif && !photoCoords && (
+        <p className="text-xs text-neutral-400">
+          No location data found in this photo.
+        </p>
+      )}
+      {photoCoordsDiffer && (
+        <div className="flex items-center justify-between rounded bg-blue-50 px-2 py-1.5 text-xs text-blue-800">
+          <span>
+            📍 Photo taken at {photoCoords[1].toFixed(5)},{" "}
+            {photoCoords[0].toFixed(5)}
+          </span>
+          <button
+            type="button"
+            onClick={() => onCoordsChange(photoCoords)}
+            className="font-medium underline"
+          >
+            Use this location
+          </button>
+        </div>
+      )}
 
       <div className="flex gap-2">
         <button
@@ -484,21 +548,47 @@ function NewItemForm({
 
 function ItemDetail({
   item,
-  layerName,
+  layers,
   deleteItemAction,
+  updateItemLayerAction,
   onClose,
 }: {
   item: Item;
-  layerName: string | null;
+  layers: Layer[];
   deleteItemAction: (itemId: string) => Promise<ActionResult>;
+  updateItemLayerAction: (
+    itemId: string,
+    layerId: string | null
+  ) => Promise<ActionResult>;
   onClose: () => void;
 }) {
+  const [layerId, setLayerId] = useState(item.layer_id ?? "");
+  const [savingLayer, setSavingLayer] = useState(false);
+
+  async function handleLayerChange(e: React.ChangeEvent<HTMLSelectElement>) {
+    const value = e.target.value;
+    setLayerId(value);
+    setSavingLayer(true);
+    await updateItemLayerAction(item.id, value || null);
+    setSavingLayer(false);
+  }
+
   return (
     <div className="flex flex-col gap-2 border-t border-neutral-200 p-4">
-      <div className="flex items-start justify-between">
-        <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
-          {layerName ?? "No layer"}
-        </p>
+      <div className="flex items-start justify-between gap-2">
+        <select
+          value={layerId}
+          onChange={handleLayerChange}
+          disabled={savingLayer}
+          className="flex-1 rounded border border-neutral-300 px-2 py-1 text-xs uppercase tracking-wide text-neutral-500"
+        >
+          <option value="">No layer</option>
+          {layers.map((l) => (
+            <option key={l.id} value={l.id}>
+              {l.name}
+            </option>
+          ))}
+        </select>
         <button onClick={onClose} className="text-sm text-neutral-400">
           ✕
         </button>

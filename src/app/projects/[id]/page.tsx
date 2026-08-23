@@ -6,6 +6,7 @@ import {
   deleteLayer,
   createItem,
   deleteItem,
+  updateItemLayer,
   setBaseMap,
   clearBaseMap,
 } from "./map-actions";
@@ -56,6 +57,7 @@ export default async function ProjectMapPage({
       deleteLayerAction={deleteLayer.bind(null, project.id)}
       createItemAction={createItem.bind(null, project.id)}
       deleteItemAction={deleteItem.bind(null, project.id)}
+      updateItemLayerAction={updateItemLayer.bind(null, project.id)}
       setBaseMapAction={setBaseMap.bind(null, project.id)}
       clearBaseMapAction={clearBaseMap.bind(null, project.id)}
     />
