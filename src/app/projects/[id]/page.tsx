@@ -1,20 +1,16 @@
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { MapEditor } from "./map-editor";
 import {
-  updateProject,
-  deleteProject,
-  inviteMember,
-  removeMember,
-} from "./actions";
-import {
-  EditProjectForm,
-  InviteMemberForm,
-  RemoveMemberButton,
-  DeleteProjectButton,
-} from "./project-forms";
+  createLayer,
+  deleteLayer,
+  createItem,
+  deleteItem,
+  setBaseMap,
+  clearBaseMap,
+} from "./map-actions";
 
-export default async function ProjectPage({
+export default async function ProjectMapPage({
   params,
 }: {
   params: Promise<{ id: string }>;
@@ -31,7 +27,7 @@ export default async function ProjectPage({
 
   const { data: project } = await supabase
     .from("projects")
-    .select("id, name, description")
+    .select("id, name, base_map_image_url, base_map_bounds")
     .eq("id", id)
     .maybeSingle();
 
@@ -39,64 +35,29 @@ export default async function ProjectPage({
     notFound();
   }
 
-  const { data: members } = await supabase.rpc("get_project_members", {
-    p_project_id: id,
-  }) as {
-    data: { user_id: string; email: string; role: string }[] | null;
-  };
+  const [{ data: layers }, { data: items }] = await Promise.all([
+    supabase
+      .from("layers")
+      .select("id, name, color")
+      .eq("project_id", id)
+      .order("created_at"),
+    supabase
+      .from("items")
+      .select("id, layer_id, title, body, media, geometry")
+      .eq("project_id", id),
+  ]);
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-8 px-6 py-12">
-      <div>
-        <Link href="/projects" className="text-sm text-neutral-500 underline">
-          ← Workspace
-        </Link>
-      </div>
-
-      <section className="flex flex-col gap-3">
-        <h1 className="text-xl font-semibold">{project.name}</h1>
-        <EditProjectForm
-          action={updateProject.bind(null, project.id)}
-          name={project.name}
-          description={project.description}
-        />
-      </section>
-
-      <section className="flex flex-col gap-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-500">
-          Members
-        </h2>
-        <ul className="flex flex-col gap-2">
-          {members?.map((member) => (
-            <li
-              key={member.user_id}
-              className="flex items-center justify-between text-sm"
-            >
-              <span>
-                {member.email}
-                {member.role === "instructor" && (
-                  <span className="ml-2 rounded bg-neutral-100 px-1.5 py-0.5 text-xs text-neutral-500">
-                    instructor
-                  </span>
-                )}
-              </span>
-              {member.user_id !== user.id && (
-                <RemoveMemberButton
-                  action={removeMember.bind(null, project.id, member.user_id)}
-                />
-              )}
-            </li>
-          ))}
-        </ul>
-        <InviteMemberForm action={inviteMember.bind(null, project.id)} />
-      </section>
-
-      <section className="border-t border-neutral-200 pt-6">
-        <p className="mb-3 text-sm text-neutral-400">
-          Map editor lands in Week 3.
-        </p>
-        <DeleteProjectButton action={deleteProject.bind(null, project.id)} />
-      </section>
-    </main>
+    <MapEditor
+      project={project}
+      layers={layers ?? []}
+      items={items ?? []}
+      createLayerAction={createLayer.bind(null, project.id)}
+      deleteLayerAction={deleteLayer.bind(null, project.id)}
+      createItemAction={createItem.bind(null, project.id)}
+      deleteItemAction={deleteItem.bind(null, project.id)}
+      setBaseMapAction={setBaseMap.bind(null, project.id)}
+      clearBaseMapAction={clearBaseMap.bind(null, project.id)}
+    />
   );
 }
