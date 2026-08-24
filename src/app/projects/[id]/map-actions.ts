@@ -190,9 +190,30 @@ export async function updateItemLayer(
   return { success: true };
 }
 
+// Soft delete: any member can delete any item, so a mistaken click would
+// otherwise destroy someone else's work irrecoverably. Restorable from the
+// editor's Trash panel via restoreItem().
 export async function deleteItem(projectId: string, itemId: string) {
   const supabase = await createClient();
-  const { error } = await supabase.from("items").delete().eq("id", itemId);
+  const { error } = await supabase
+    .from("items")
+    .update({ deleted_at: new Date().toISOString() })
+    .eq("id", itemId);
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  revalidatePath(`/projects/${projectId}`);
+  return { success: true };
+}
+
+export async function restoreItem(projectId: string, itemId: string) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("items")
+    .update({ deleted_at: null })
+    .eq("id", itemId);
 
   if (error) {
     return { error: error.message };

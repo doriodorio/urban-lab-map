@@ -187,10 +187,12 @@ export function MapEditor({
   project,
   layers,
   items,
+  deletedItems,
   createLayerAction,
   deleteLayerAction,
   createItemAction,
   deleteItemAction,
+  restoreItemAction,
   updateItemLayerAction,
   updateItemTagsAction,
   setBaseMapAction,
@@ -199,10 +201,12 @@ export function MapEditor({
   project: Project;
   layers: Layer[];
   items: Item[];
+  deletedItems: (Item & { deleted_at: string | null })[];
   createLayerAction: BoundAction;
   deleteLayerAction: (layerId: string) => Promise<ActionResult>;
   createItemAction: BoundAction;
   deleteItemAction: (itemId: string) => Promise<ActionResult>;
+  restoreItemAction: (itemId: string) => Promise<ActionResult>;
   updateItemLayerAction: (
     itemId: string,
     layerId: string | null
@@ -239,9 +243,9 @@ export function MapEditor({
   // panel wouldn't show up on reopening it.
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const selectedItem = items.find((i) => i.id === selectedItemId) ?? null;
-  const [panel, setPanel] = useState<"layers" | "filters" | "basemap" | null>(
-    "layers"
-  );
+  const [panel, setPanel] = useState<
+    "layers" | "filters" | "basemap" | "trash" | null
+  >("layers");
   const [mapStyleId, setMapStyleId] = useState(MAP_STYLES[0].id);
 
   const layerColor = (layerId: string | null) =>
@@ -725,6 +729,13 @@ export function MapEditor({
           >
             Base map
           </button>
+          <button
+            onClick={() => setPanel("trash")}
+            className={`flex-1 py-2 ${panel === "trash" ? "font-semibold" : "text-neutral-400"}`}
+          >
+            Trash
+            {deletedItems.length > 0 && ` (${deletedItems.length})`}
+          </button>
         </div>
 
         {panel === "layers" && (
@@ -754,6 +765,13 @@ export function MapEditor({
             project={project}
             setBaseMapAction={setBaseMapAction}
             clearBaseMapAction={clearBaseMapAction}
+          />
+        )}
+
+        {panel === "trash" && (
+          <TrashPanel
+            deletedItems={deletedItems}
+            restoreItemAction={restoreItemAction}
           />
         )}
 
@@ -821,6 +839,15 @@ function LayerPanel({
               action={async () => {
                 await deleteLayerAction(layer.id);
               }}
+              onSubmit={(e) => {
+                if (
+                  !confirm(
+                    `Delete the layer "${layer.name}"? Its items are kept, but they'll no longer belong to any layer. This can't be undone.`
+                  )
+                ) {
+                  e.preventDefault();
+                }
+              }}
             >
               <button
                 type="submit"
@@ -864,6 +891,58 @@ function LayerPanel({
         </button>
         {state?.error && <p className="text-sm text-red-600">{state.error}</p>}
       </form>
+    </div>
+  );
+}
+
+function TrashPanel({
+  deletedItems,
+  restoreItemAction,
+}: {
+  deletedItems: (Item & { deleted_at: string | null })[];
+  restoreItemAction: (itemId: string) => Promise<ActionResult>;
+}) {
+  return (
+    <div className="flex flex-col gap-3 p-4">
+      <p className="text-xs text-neutral-500">
+        Deleted items are kept here rather than destroyed, so a mistaken
+        delete can be undone by anyone in the project.
+      </p>
+
+      {deletedItems.length === 0 && (
+        <p className="text-sm text-neutral-400">Nothing deleted.</p>
+      )}
+
+      <ul className="flex flex-col gap-3">
+        {deletedItems.map((item) => (
+          <li
+            key={item.id}
+            className="flex flex-col gap-1 border-b border-neutral-100 pb-3"
+          >
+            <span className="text-sm font-medium">
+              {item.title || "Untitled"}
+            </span>
+            <span className="text-xs text-neutral-400">
+              {TYPE_OPTIONS.find((t) => t.value === item.type)?.label ??
+                item.type}
+              {item.deleted_at &&
+                ` · deleted ${new Date(item.deleted_at).toLocaleDateString()}`}
+            </span>
+            <form
+              action={async () => {
+                await restoreItemAction(item.id);
+              }}
+            >
+              <button
+                type="submit"
+                className="text-xs text-blue-600 underline"
+              >
+                Restore
+              </button>
+            </form>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
@@ -1295,6 +1374,15 @@ function ItemDetail({
         action={async () => {
           await deleteItemAction(item.id);
           onClose();
+        }}
+        onSubmit={(e) => {
+          if (
+            !confirm(
+              `Delete "${item.title || "this item"}"? You can restore it from the Trash panel.`
+            )
+          ) {
+            e.preventDefault();
+          }
         }}
       >
         <button type="submit" className="text-sm text-red-600 underline">

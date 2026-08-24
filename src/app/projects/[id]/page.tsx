@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { MapEditor } from "./map-editor";
@@ -6,6 +7,7 @@ import {
   deleteLayer,
   createItem,
   deleteItem,
+  restoreItem,
   updateItemLayer,
   updateItemTags,
   setBaseMap,
@@ -37,7 +39,10 @@ export default async function ProjectMapPage({
     notFound();
   }
 
-  const [{ data: layers }, { data: items }] = await Promise.all([
+  const itemColumns =
+    "id, layer_id, type, title, body, attribution, tags, date_start, media, geometry";
+
+  const [layersResult, itemsResult, deletedItemsResult] = await Promise.all([
     supabase
       .from("layers")
       .select("id, name, color")
@@ -45,21 +50,60 @@ export default async function ProjectMapPage({
       .order("created_at"),
     supabase
       .from("items")
-      .select(
-        "id, layer_id, type, title, body, attribution, tags, date_start, media, geometry"
-      )
-      .eq("project_id", id),
+      .select(itemColumns)
+      .eq("project_id", id)
+      .is("deleted_at", null),
+    supabase
+      .from("items")
+      .select(`${itemColumns}, deleted_at`)
+      .eq("project_id", id)
+      .not("deleted_at", "is", null)
+      .order("deleted_at", { ascending: false }),
   ]);
+
+  // Never fall back to an empty array on a failed query: an editor showing
+  // zero items is indistinguishable from "someone deleted all our work", and
+  // that's the last thing a group should have to guess about. Surface it.
+  const loadError =
+    layersResult.error ?? itemsResult.error ?? deletedItemsResult.error;
+
+  if (loadError) {
+    return (
+      <main className="mx-auto flex min-h-screen max-w-lg flex-col justify-center gap-4 px-6">
+        <h1 className="text-lg font-semibold">Couldn&apos;t load this map</h1>
+        <p className="text-sm text-neutral-600">
+          Your items are still stored — this is a problem reading them, not a
+          deletion. Retry in a moment; if it persists, send this to whoever
+          maintains the tool:
+        </p>
+        <pre className="overflow-x-auto rounded bg-neutral-100 p-3 text-xs">
+          {loadError.message}
+        </pre>
+        <Link
+          href="/projects"
+          className="text-sm text-neutral-500 underline"
+        >
+          ← Workspace
+        </Link>
+      </main>
+    );
+  }
+
+  const { data: layers } = layersResult;
+  const { data: items } = itemsResult;
+  const { data: deletedItems } = deletedItemsResult;
 
   return (
     <MapEditor
       project={project}
       layers={layers ?? []}
       items={items ?? []}
+      deletedItems={deletedItems ?? []}
       createLayerAction={createLayer.bind(null, project.id)}
       deleteLayerAction={deleteLayer.bind(null, project.id)}
       createItemAction={createItem.bind(null, project.id)}
       deleteItemAction={deleteItem.bind(null, project.id)}
+      restoreItemAction={restoreItem.bind(null, project.id)}
       updateItemLayerAction={updateItemLayer.bind(null, project.id)}
       updateItemTagsAction={updateItemTags.bind(null, project.id)}
       setBaseMapAction={setBaseMap.bind(null, project.id)}
