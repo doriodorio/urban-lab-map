@@ -7,6 +7,7 @@ import {
   createItem,
   deleteItem,
   updateItemLayer,
+  updateItemTags,
   setBaseMap,
   clearBaseMap,
 } from "./map-actions";
@@ -44,7 +45,9 @@ export default async function ProjectMapPage({
       .order("created_at"),
     supabase
       .from("items")
-      .select("id, layer_id, title, body, media, geometry")
+      .select(
+        "id, layer_id, type, title, body, attribution, tags, date_start, media, geometry"
+      )
       .eq("project_id", id),
   ]);
 
@@ -58,6 +61,7 @@ export default async function ProjectMapPage({
       createItemAction={createItem.bind(null, project.id)}
       deleteItemAction={deleteItem.bind(null, project.id)}
       updateItemLayerAction={updateItemLayer.bind(null, project.id)}
+      updateItemTagsAction={updateItemTags.bind(null, project.id)}
       setBaseMapAction={setBaseMap.bind(null, project.id)}
       clearBaseMapAction={clearBaseMap.bind(null, project.id)}
     />

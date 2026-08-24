@@ -42,12 +42,12 @@ export async function deleteLayer(projectId: string, layerId: string) {
   return { success: true };
 }
 
-async function uploadImage(
+async function uploadFile(
   supabase: Awaited<ReturnType<typeof createClient>>,
   projectId: string,
   file: File
 ) {
-  const ext = file.name.split(".").pop() || "jpg";
+  const ext = file.name.split(".").pop() || "bin";
   const path = `${projectId}/${crypto.randomUUID()}.${ext}`;
 
   const { error } = await supabase.storage
@@ -65,6 +65,16 @@ async function uploadImage(
   return publicUrl;
 }
 
+const VALID_TYPES = [
+  "image",
+  "text",
+  "quote",
+  "interview",
+  "document",
+  "data",
+  "composite",
+];
+
 export async function createItem(
   projectId: string,
   _prevState: ActionResult,
@@ -72,39 +82,86 @@ export async function createItem(
 ): Promise<ActionResult> {
   const title = (formData.get("title") as string)?.trim();
   const body = (formData.get("body") as string)?.trim() || null;
+  const attribution = (formData.get("attribution") as string)?.trim() || null;
   const layerId = (formData.get("layer_id") as string) || null;
-  const lng = parseFloat(formData.get("lng") as string);
-  const lat = parseFloat(formData.get("lat") as string);
+  const type = (formData.get("type") as string) || "text";
+  const dateStart = (formData.get("date_start") as string) || null;
+  const tagsRaw = (formData.get("tags") as string) || "";
+  const tags = tagsRaw
+    .split(",")
+    .map((t) => t.trim())
+    .filter(Boolean);
+  const geometryRaw = formData.get("geometry") as string;
   const image = formData.get("image") as File | null;
+  const mediaFile = formData.get("media_file") as File | null;
+  const mediaUrl = (formData.get("media_url") as string)?.trim() || null;
 
   if (!title) {
     return { error: "Title is required." };
   }
-  if (Number.isNaN(lng) || Number.isNaN(lat)) {
+  if (!VALID_TYPES.includes(type)) {
+    return { error: "Invalid item type." };
+  }
+  let geometry: { type: string; coordinates: unknown };
+  try {
+    geometry = JSON.parse(geometryRaw);
+  } catch {
     return { error: "Missing map location." };
   }
 
   const supabase = await createClient();
 
-  let media: { url: string; type: string }[] = [];
-  if (image && image.size > 0) {
-    try {
-      const url = await uploadImage(supabase, projectId, image);
-      media = [{ url, type: "image" }];
-    } catch (e) {
-      return { error: e instanceof Error ? e.message : "Image upload failed." };
+  const media: { url: string; type: string }[] = [];
+  try {
+    if (image && image.size > 0) {
+      media.push({ url: await uploadFile(supabase, projectId, image), type: "image" });
     }
+    if (mediaFile && mediaFile.size > 0) {
+      const kind = mediaFile.type.startsWith("audio")
+        ? "audio"
+        : mediaFile.type.startsWith("video")
+        ? "video"
+        : "document";
+      media.push({ url: await uploadFile(supabase, projectId, mediaFile), type: kind });
+    }
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "File upload failed." };
+  }
+  if (mediaUrl) {
+    media.push({ url: mediaUrl, type: "embed" });
   }
 
   const { error } = await supabase.from("items").insert({
     project_id: projectId,
     layer_id: layerId || null,
-    type: media.length > 0 ? "image" : "text",
-    geometry: { type: "Point", coordinates: [lng, lat] },
+    type,
+    geometry,
     title,
     body,
+    attribution,
+    tags,
+    date_start: dateStart || null,
     media,
   });
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  revalidatePath(`/projects/${projectId}`);
+  return { success: true };
+}
+
+export async function updateItemTags(
+  projectId: string,
+  itemId: string,
+  tags: string[]
+) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("items")
+    .update({ tags })
+    .eq("id", itemId);
 
   if (error) {
     return { error: error.message };
@@ -167,7 +224,7 @@ export async function setBaseMap(
 
   let url: string;
   try {
-    url = await uploadImage(supabase, projectId, image);
+    url = await uploadFile(supabase, projectId, image);
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Image upload failed." };
   }

@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Vendored files copied as-is into public/ (e.g. maplibre-gl-worker.mjs)
+    "public/**",
   ]),
 ]);
 
