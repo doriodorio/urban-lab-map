@@ -1432,6 +1432,7 @@ function ItemDetail({
   const [savingLayer, setSavingLayer] = useState(false);
   const [tagsInput, setTagsInput] = useState((item.tags ?? []).join(", "));
   const [linkTarget, setLinkTarget] = useState("");
+  const [linkQuery, setLinkQuery] = useState("");
   const [linkNote, setLinkNote] = useState("");
   const [linking, setLinking] = useState(false);
   const [linkError, setLinkError] = useState<string | null>(null);
@@ -1440,6 +1441,12 @@ function ItemDetail({
   const linkCandidates = allItems.filter(
     (i) => i.id !== item.id && !alreadyLinked.has(i.id)
   );
+  // Same matcher the map search uses, so "find the item I'm thinking of"
+  // behaves identically in both places.
+  const matchingCandidates = linkCandidates.filter((i) =>
+    matchesQuery(i, linkQuery)
+  );
+  const selectedTarget = linkCandidates.find((i) => i.id === linkTarget);
 
   async function handleCreateLink() {
     setLinking(true);
@@ -1455,6 +1462,7 @@ function ItemDetail({
     } else {
       setLinkTarget("");
       setLinkNote("");
+      setLinkQuery("");
     }
   }
 
@@ -1598,20 +1606,23 @@ function ItemDetail({
 
         {linkCandidates.length > 0 && (
           <div className="flex flex-col gap-2 pt-1">
-            <select
-              value={linkTarget}
-              onChange={(e) => setLinkTarget(e.target.value)}
-              className="rounded border border-neutral-300 px-2 py-1.5 text-sm"
-            >
-              <option value="">Link to…</option>
-              {linkCandidates.map((i) => (
-                <option key={i.id} value={i.id}>
-                  {i.title || "Untitled"}
-                </option>
-              ))}
-            </select>
-            {linkTarget && (
-              <>
+            {selectedTarget ? (
+              // Chosen: confirm what's being linked, and why.
+              <div className="flex flex-col gap-2 rounded border border-neutral-200 p-2">
+                <div className="flex items-start justify-between gap-2">
+                  <span className="text-sm font-medium">
+                    {selectedTarget.title || "Untitled"}
+                  </span>
+                  <button
+                    onClick={() => {
+                      setLinkTarget("");
+                      setLinkError(null);
+                    }}
+                    className="text-xs text-neutral-400 underline"
+                  >
+                    Change
+                  </button>
+                </div>
                 <input
                   type="text"
                   value={linkNote}
@@ -1626,6 +1637,41 @@ function ItemDetail({
                 >
                   {linking ? "Linking…" : "Add link"}
                 </button>
+              </div>
+            ) : (
+              <>
+                <input
+                  type="search"
+                  value={linkQuery}
+                  onChange={(e) => setLinkQuery(e.target.value)}
+                  placeholder="Link to… search by title, text, tag"
+                  className="rounded border border-neutral-300 px-2 py-1.5 text-sm"
+                />
+                <ul className="flex max-h-48 flex-col overflow-y-auto">
+                  {matchingCandidates.slice(0, 30).map((i) => (
+                    <li key={i.id}>
+                      <button
+                        onClick={() => {
+                          setLinkTarget(i.id);
+                          setLinkQuery("");
+                        }}
+                        className="w-full truncate py-1 text-left text-sm text-blue-600 underline"
+                      >
+                        {i.title || "Untitled"}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+                {matchingCandidates.length === 0 && (
+                  <p className="text-sm text-neutral-400">
+                    No items match “{linkQuery}”.
+                  </p>
+                )}
+                {matchingCandidates.length > 30 && (
+                  <p className="text-xs text-neutral-400">
+                    Showing the first 30 — keep typing to narrow.
+                  </p>
+                )}
               </>
             )}
             {linkError && (
