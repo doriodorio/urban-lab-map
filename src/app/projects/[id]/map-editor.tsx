@@ -30,6 +30,12 @@ type Project = {
   base_map_image_url: string | null;
   base_map_bounds: [[number, number], [number, number]] | null;
 };
+type ItemLink = {
+  id: string;
+  item_a: string;
+  item_b: string;
+  note: string | null;
+};
 
 type ActionResult = { error?: string; success?: boolean };
 type BoundAction = (
@@ -163,12 +169,27 @@ function bodyLabelFor(type: string) {
   return TYPE_OPTIONS.find((t) => t.value === type)?.bodyLabel ?? "Notes";
 }
 
+// Searches the text a researcher would actually recall: title, body, the
+// attribution (interviewee, source, citation), and tags.
+function matchesQuery(item: Item, query: string) {
+  if (!query) return true;
+  const q = query.toLowerCase();
+  return [
+    item.title,
+    item.body,
+    item.attribution,
+    ...(item.tags ?? []),
+    TYPE_OPTIONS.find((t) => t.value === item.type)?.label,
+  ].some((field) => field?.toLowerCase().includes(q));
+}
+
 function isVisible(
   item: Item,
   hiddenLayerIds: Set<string>,
   activeTags: Set<string>,
   dateFrom: string | null,
-  dateTo: string | null
+  dateTo: string | null,
+  query: string
 ) {
   if (hiddenLayerIds.has(item.layer_id ?? "unassigned")) return false;
   if (activeTags.size > 0 && !(item.tags ?? []).some((t) => activeTags.has(t))) {
@@ -178,7 +199,36 @@ function isVisible(
     if (dateFrom && item.date_start < dateFrom) return false;
     if (dateTo && item.date_start > dateTo) return false;
   }
+  if (!matchesQuery(item, query)) return false;
   return true;
+}
+
+// A link's other end, resolved against the live items. Soft-deleted items
+// drop out here rather than rendering as a dead entry; restoring one brings
+// its links back with it.
+function linkedItemsFor(itemId: string, links: ItemLink[], items: Item[]) {
+  return links
+    .filter((l) => l.item_a === itemId || l.item_b === itemId)
+    .map((l) => ({
+      link: l,
+      other: items.find(
+        (i) => i.id === (l.item_a === itemId ? l.item_b : l.item_a)
+      ),
+    }))
+    .filter((x): x is { link: ItemLink; other: Item } => Boolean(x.other));
+}
+
+function centroid(geometry: Geometry): [number, number] {
+  if (geometry.type === "Point") return geometry.coordinates;
+  const ring =
+    geometry.type === "LineString"
+      ? geometry.coordinates
+      : geometry.coordinates[0];
+  const sum = ring.reduce<[number, number]>(
+    (acc, [lng, lat]) => [acc[0] + lng, acc[1] + lat],
+    [0, 0]
+  );
+  return [sum[0] / ring.length, sum[1] / ring.length];
 }
 
 type DrawMode = "point" | "line" | "polygon" | null;
@@ -188,6 +238,7 @@ export function MapEditor({
   layers,
   items,
   deletedItems,
+  links,
   createLayerAction,
   deleteLayerAction,
   createItemAction,
@@ -195,6 +246,8 @@ export function MapEditor({
   restoreItemAction,
   updateItemLayerAction,
   updateItemTagsAction,
+  createItemLinkAction,
+  deleteItemLinkAction,
   setBaseMapAction,
   clearBaseMapAction,
 }: {
@@ -202,6 +255,7 @@ export function MapEditor({
   layers: Layer[];
   items: Item[];
   deletedItems: (Item & { deleted_at: string | null })[];
+  links: ItemLink[];
   createLayerAction: BoundAction;
   deleteLayerAction: (layerId: string) => Promise<ActionResult>;
   createItemAction: BoundAction;
@@ -215,6 +269,12 @@ export function MapEditor({
     itemId: string,
     tags: string[]
   ) => Promise<ActionResult>;
+  createItemLinkAction: (
+    itemId: string,
+    otherItemId: string,
+    note: string | null
+  ) => Promise<ActionResult>;
+  deleteItemLinkAction: (linkId: string) => Promise<ActionResult>;
   setBaseMapAction: BoundAction;
   clearBaseMapAction: () => Promise<ActionResult>;
 }) {
@@ -229,6 +289,7 @@ export function MapEditor({
   const [activeTags, setActiveTags] = useState<Set<string>>(new Set());
   const [dateFrom, setDateFrom] = useState<string | null>(null);
   const [dateTo, setDateTo] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
 
   const [drawMode, setDrawMode] = useState<DrawMode>(null);
   const [drawPoints, setDrawPoints] = useState<[number, number][]>([]);
@@ -490,7 +551,7 @@ export function MapEditor({
     }
 
     for (const item of pointItems) {
-      const visible = isVisible(item, hiddenLayerIds, activeTags, dateFrom, dateTo);
+      const visible = isVisible(item, hiddenLayerIds, activeTags, dateFrom, dateTo, query);
       let marker = markersRef.current.get(item.id);
 
       if (!marker) {
@@ -522,7 +583,7 @@ export function MapEditor({
       el.style.display = visible ? "block" : "none";
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items, hiddenLayerIds, activeTags, dateFrom, dateTo, layers]);
+  }, [items, hiddenLayerIds, activeTags, dateFrom, dateTo, query, layers]);
 
   // Render line/polygon items.
   useEffect(() => {
@@ -538,7 +599,7 @@ export function MapEditor({
       const polyFeatures: GeoJSON.Feature[] = [];
 
       for (const item of items) {
-        const visible = isVisible(item, hiddenLayerIds, activeTags, dateFrom, dateTo);
+        const visible = isVisible(item, hiddenLayerIds, activeTags, dateFrom, dateTo, query);
         if (!visible) continue;
 
         const color = layerColor(item.layer_id);
@@ -564,7 +625,7 @@ export function MapEditor({
     if (map.isStyleLoaded()) update();
     else map.once("load", update);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items, hiddenLayerIds, activeTags, dateFrom, dateTo, layers]);
+  }, [items, hiddenLayerIds, activeTags, dateFrom, dateTo, query, layers]);
 
   // Marker for a pending new Point item.
   useEffect(() => {
@@ -594,6 +655,13 @@ export function MapEditor({
       else next.add(id);
       return next;
     });
+  }
+
+  // Select an item and bring it into view - used by search results and by
+  // following a link, where the target is often off-screen.
+  function focusItem(item: Item) {
+    setSelectedItemId(item.id);
+    mapRef.current?.easeTo({ center: centroid(item.geometry), duration: 600 });
   }
 
   function toggleTag(tag: string) {
@@ -757,6 +825,19 @@ export function MapEditor({
             dateTo={dateTo}
             onDateFromChange={setDateFrom}
             onDateToChange={setDateTo}
+            query={query}
+            onQueryChange={setQuery}
+            results={items.filter((i) =>
+              isVisible(
+                i,
+                hiddenLayerIds,
+                activeTags,
+                dateFrom,
+                dateTo,
+                query
+              )
+            )}
+            onSelectResult={focusItem}
           />
         )}
 
@@ -794,9 +875,14 @@ export function MapEditor({
             key={selectedItem.id}
             item={selectedItem}
             layers={layers}
+            allItems={items}
+            linked={linkedItemsFor(selectedItem.id, links, items)}
             deleteItemAction={deleteItemAction}
             updateItemLayerAction={updateItemLayerAction}
             updateItemTagsAction={updateItemTagsAction}
+            createItemLinkAction={createItemLinkAction}
+            deleteItemLinkAction={deleteItemLinkAction}
+            onFollowLink={focusItem}
             onClose={() => setSelectedItemId(null)}
           />
         )}
@@ -955,6 +1041,10 @@ function FiltersPanel({
   dateTo,
   onDateFromChange,
   onDateToChange,
+  query,
+  onQueryChange,
+  results,
+  onSelectResult,
 }: {
   items: Item[];
   activeTags: Set<string>;
@@ -963,6 +1053,10 @@ function FiltersPanel({
   dateTo: string | null;
   onDateFromChange: (v: string | null) => void;
   onDateToChange: (v: string | null) => void;
+  query: string;
+  onQueryChange: (v: string) => void;
+  results: Item[];
+  onSelectResult: (item: Item) => void;
 }) {
   const allTags = Array.from(
     new Set(items.flatMap((i) => i.tags ?? []))
@@ -971,6 +1065,41 @@ function FiltersPanel({
   return (
     <div className="flex flex-col gap-5 p-4">
       <div className="flex flex-col gap-2">
+        <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
+          Search
+        </p>
+        <input
+          type="search"
+          value={query}
+          onChange={(e) => onQueryChange(e.target.value)}
+          placeholder="Title, text, source, tag…"
+          className="rounded border border-neutral-300 px-2 py-1.5 text-sm"
+        />
+        <p className="text-xs text-neutral-400">
+          {query
+            ? `${results.length} of ${items.length} shown on the map`
+            : `${results.length} items shown on the map`}
+        </p>
+        <ul className="flex flex-col">
+          {results.slice(0, 50).map((item) => (
+            <li key={item.id}>
+              <button
+                onClick={() => onSelectResult(item)}
+                className="w-full truncate py-1 text-left text-sm text-blue-600 underline"
+              >
+                {item.title || "Untitled"}
+              </button>
+            </li>
+          ))}
+        </ul>
+        {results.length > 50 && (
+          <p className="text-xs text-neutral-400">
+            Showing the first 50 — narrow the search to see more.
+          </p>
+        )}
+      </div>
+
+      <div className="flex flex-col gap-2 border-t border-neutral-200 pt-4">
         <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
           Tags
         </p>
@@ -1251,13 +1380,20 @@ function NewItemForm({
 function ItemDetail({
   item,
   layers,
+  allItems,
+  linked,
   deleteItemAction,
   updateItemLayerAction,
   updateItemTagsAction,
+  createItemLinkAction,
+  deleteItemLinkAction,
+  onFollowLink,
   onClose,
 }: {
   item: Item;
   layers: Layer[];
+  allItems: Item[];
+  linked: { link: ItemLink; other: Item }[];
   deleteItemAction: (itemId: string) => Promise<ActionResult>;
   updateItemLayerAction: (
     itemId: string,
@@ -1267,11 +1403,44 @@ function ItemDetail({
     itemId: string,
     tags: string[]
   ) => Promise<ActionResult>;
+  createItemLinkAction: (
+    itemId: string,
+    otherItemId: string,
+    note: string | null
+  ) => Promise<ActionResult>;
+  deleteItemLinkAction: (linkId: string) => Promise<ActionResult>;
+  onFollowLink: (item: Item) => void;
   onClose: () => void;
 }) {
   const [layerId, setLayerId] = useState(item.layer_id ?? "");
   const [savingLayer, setSavingLayer] = useState(false);
   const [tagsInput, setTagsInput] = useState((item.tags ?? []).join(", "));
+  const [linkTarget, setLinkTarget] = useState("");
+  const [linkNote, setLinkNote] = useState("");
+  const [linking, setLinking] = useState(false);
+  const [linkError, setLinkError] = useState<string | null>(null);
+
+  const alreadyLinked = new Set(linked.map((l) => l.other.id));
+  const linkCandidates = allItems.filter(
+    (i) => i.id !== item.id && !alreadyLinked.has(i.id)
+  );
+
+  async function handleCreateLink() {
+    setLinking(true);
+    setLinkError(null);
+    const result = await createItemLinkAction(
+      item.id,
+      linkTarget,
+      linkNote || null
+    );
+    setLinking(false);
+    if (result.error) {
+      setLinkError(result.error);
+    } else {
+      setLinkTarget("");
+      setLinkNote("");
+    }
+  }
 
   async function handleLayerChange(e: React.ChangeEvent<HTMLSelectElement>) {
     const value = e.target.value;
@@ -1369,6 +1538,86 @@ function ItemDetail({
           className="rounded border border-neutral-300 px-2 py-1 text-sm"
         />
       </label>
+
+      <div className="flex flex-col gap-2 border-t border-neutral-200 pt-3">
+        <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
+          Linked items
+        </p>
+
+        {linked.length === 0 && (
+          <p className="text-sm text-neutral-400">
+            Not linked to anything yet.
+          </p>
+        )}
+
+        <ul className="flex flex-col gap-2">
+          {linked.map(({ link, other }) => (
+            <li key={link.id} className="flex flex-col gap-0.5">
+              <div className="flex items-start justify-between gap-2">
+                <button
+                  onClick={() => onFollowLink(other)}
+                  className="flex-1 text-left text-sm text-blue-600 underline"
+                >
+                  {other.title || "Untitled"}
+                </button>
+                <form
+                  action={async () => {
+                    await deleteItemLinkAction(link.id);
+                  }}
+                >
+                  <button
+                    type="submit"
+                    className="text-xs text-neutral-400 underline hover:text-red-600"
+                  >
+                    Unlink
+                  </button>
+                </form>
+              </div>
+              {link.note && (
+                <span className="text-xs text-neutral-500">{link.note}</span>
+              )}
+            </li>
+          ))}
+        </ul>
+
+        {linkCandidates.length > 0 && (
+          <div className="flex flex-col gap-2 pt-1">
+            <select
+              value={linkTarget}
+              onChange={(e) => setLinkTarget(e.target.value)}
+              className="rounded border border-neutral-300 px-2 py-1.5 text-sm"
+            >
+              <option value="">Link to…</option>
+              {linkCandidates.map((i) => (
+                <option key={i.id} value={i.id}>
+                  {i.title || "Untitled"}
+                </option>
+              ))}
+            </select>
+            {linkTarget && (
+              <>
+                <input
+                  type="text"
+                  value={linkNote}
+                  onChange={(e) => setLinkNote(e.target.value)}
+                  placeholder="How are they related? (optional)"
+                  className="rounded border border-neutral-300 px-2 py-1.5 text-sm"
+                />
+                <button
+                  onClick={handleCreateLink}
+                  disabled={linking}
+                  className="rounded bg-black px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+                >
+                  {linking ? "Linking…" : "Add link"}
+                </button>
+              </>
+            )}
+            {linkError && (
+              <p className="text-sm text-red-600">{linkError}</p>
+            )}
+          </div>
+        )}
+      </div>
 
       <form
         action={async () => {

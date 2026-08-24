@@ -10,6 +10,8 @@ import {
   restoreItem,
   updateItemLayer,
   updateItemTags,
+  createItemLink,
+  deleteItemLink,
   setBaseMap,
   clearBaseMap,
 } from "./map-actions";
@@ -93,12 +95,28 @@ export default async function ProjectMapPage({
   const { data: items } = itemsResult;
   const { data: deletedItems } = deletedItemsResult;
 
+  // Links are stored with the pair ordered (item_a < item_b), so every link
+  // touching this project has its item_a among the project's items - one
+  // `in` on item_a is enough to fetch them all. Deleted ids are included so a
+  // restored item gets its links back rather than losing them permanently.
+  const allItemIds = [
+    ...(items ?? []).map((i) => i.id),
+    ...(deletedItems ?? []).map((i) => i.id),
+  ];
+  const { data: links } = allItemIds.length
+    ? await supabase
+        .from("item_links")
+        .select("id, item_a, item_b, note")
+        .in("item_a", allItemIds)
+    : { data: [] };
+
   return (
     <MapEditor
       project={project}
       layers={layers ?? []}
       items={items ?? []}
       deletedItems={deletedItems ?? []}
+      links={links ?? []}
       createLayerAction={createLayer.bind(null, project.id)}
       deleteLayerAction={deleteLayer.bind(null, project.id)}
       createItemAction={createItem.bind(null, project.id)}
@@ -106,6 +124,8 @@ export default async function ProjectMapPage({
       restoreItemAction={restoreItem.bind(null, project.id)}
       updateItemLayerAction={updateItemLayer.bind(null, project.id)}
       updateItemTagsAction={updateItemTags.bind(null, project.id)}
+      createItemLinkAction={createItemLink.bind(null, project.id)}
+      deleteItemLinkAction={deleteItemLink.bind(null, project.id)}
       setBaseMapAction={setBaseMap.bind(null, project.id)}
       clearBaseMapAction={clearBaseMap.bind(null, project.id)}
     />

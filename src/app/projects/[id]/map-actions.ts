@@ -223,6 +223,67 @@ export async function restoreItem(projectId: string, itemId: string) {
   return { success: true };
 }
 
+// Links are undirected and stored with the pair in a canonical order (see
+// supabase/week5_links.sql), so both ends have to be sorted before insert or
+// the unique index won't catch a duplicate created from the other direction.
+export async function createItemLink(
+  projectId: string,
+  itemId: string,
+  otherItemId: string,
+  note: string | null
+): Promise<ActionResult> {
+  if (!otherItemId) {
+    return { error: "Choose an item to link to." };
+  }
+  if (itemId === otherItemId) {
+    return { error: "An item can't be linked to itself." };
+  }
+
+  const supabase = await createClient();
+
+  // Both ends must live in this project - the picker only offers items from
+  // it, but the id arrives from the client, so don't take that on trust.
+  const { data: ends, error: endsError } = await supabase
+    .from("items")
+    .select("id")
+    .eq("project_id", projectId)
+    .in("id", [itemId, otherItemId]);
+
+  if (endsError) {
+    return { error: endsError.message };
+  }
+  if ((ends?.length ?? 0) !== 2) {
+    return { error: "Both items must belong to this project." };
+  }
+
+  const [item_a, item_b] = [itemId, otherItemId].sort();
+  const { error } = await supabase
+    .from("item_links")
+    .insert({ item_a, item_b, note: note?.trim() || null });
+
+  if (error) {
+    if (error.code === "23505") {
+      return { error: "These items are already linked." };
+    }
+    return { error: error.message };
+  }
+
+  revalidatePath(`/projects/${projectId}`);
+  return { success: true };
+}
+
+export async function deleteItemLink(projectId: string, linkId: string) {
+  const supabase = await createClient();
+  const { error } = await supabase.from("item_links").delete().eq("id", linkId);
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  revalidatePath(`/projects/${projectId}`);
+  return { success: true };
+}
+
 export async function setBaseMap(
   projectId: string,
   _prevState: ActionResult,
