@@ -8,6 +8,7 @@ import {
   createItem,
   deleteItem,
   restoreItem,
+  purgeItem,
   updateItemLayer,
   updateItemTags,
   createItemLink,
@@ -140,11 +141,13 @@ export default async function ProjectMapPage({
       deletedItems={deletedItems ?? []}
       links={links ?? []}
       memberNames={memberNames}
+      currentUserId={user.id}
       createLayerAction={createLayer.bind(null, project.id)}
       deleteLayerAction={deleteLayer.bind(null, project.id)}
       createItemAction={createItem.bind(null, project.id)}
       deleteItemAction={deleteItem.bind(null, project.id)}
       restoreItemAction={restoreItem.bind(null, project.id)}
+      purgeItemAction={purgeItem.bind(null, project.id)}
       updateItemLayerAction={updateItemLayer.bind(null, project.id)}
       updateItemTagsAction={updateItemTags.bind(null, project.id)}
       createItemLinkAction={createItemLink.bind(null, project.id)}

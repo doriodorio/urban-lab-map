@@ -212,6 +212,84 @@ export async function deleteItem(projectId: string, itemId: string) {
   return { success: true };
 }
 
+// Media urls are public bucket urls; the storage API needs the path within
+// the bucket. Anything not served from our bucket (embedded YouTube/Vimeo
+// links, for instance) has no file to remove and is skipped.
+const BUCKET_MARKER = "/storage/v1/object/public/project-media/";
+
+function storagePathFromUrl(url: string): string | null {
+  const at = url.indexOf(BUCKET_MARKER);
+  if (at === -1) return null;
+  return decodeURIComponent(url.slice(at + BUCKET_MARKER.length));
+}
+
+// Hard delete, restricted to the item's creator. The check is enforced by the
+// items_delete_creator RLS policy (see purge_items.sql); the explicit checks
+// here exist to return a useful message instead of a silent no-op, since a
+// blocked delete comes back as "0 rows affected" rather than an error.
+export async function purgeItem(
+  projectId: string,
+  itemId: string
+): Promise<ActionResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { error: "Not signed in." };
+  }
+
+  const { data: item, error: readError } = await supabase
+    .from("items")
+    .select("id, created_by, deleted_at, media")
+    .eq("id", itemId)
+    .maybeSingle();
+
+  if (readError) {
+    return { error: readError.message };
+  }
+  if (!item) {
+    return { error: "Item not found." };
+  }
+  if (!item.deleted_at) {
+    return { error: "Delete the item first — only trashed items can be purged." };
+  }
+  if (item.created_by !== user.id) {
+    return {
+      error: item.created_by
+        ? "Only the person who added this item can delete it permanently."
+        : "This item predates authorship tracking, so it has no owner who can permanently delete it.",
+    };
+  }
+
+  // Remove the row first: if this is blocked, the files must survive.
+  const { error: deleteError, count } = await supabase
+    .from("items")
+    .delete({ count: "exact" })
+    .eq("id", itemId);
+
+  if (deleteError) {
+    return { error: deleteError.message };
+  }
+  if (!count) {
+    return { error: "Couldn't delete this item." };
+  }
+
+  // Best effort: the row is already gone, so a storage failure here leaves an
+  // orphaned file rather than a broken item. Not worth failing the action over.
+  const paths = ((item.media ?? []) as { url: string }[])
+    .map((m) => storagePathFromUrl(m.url))
+    .filter((p): p is string => Boolean(p));
+
+  if (paths.length) {
+    await supabase.storage.from("project-media").remove(paths);
+  }
+
+  revalidatePath(`/projects/${projectId}`);
+  return { success: true };
+}
+
 export async function restoreItem(projectId: string, itemId: string) {
   const supabase = await createClient();
   const { error } = await supabase

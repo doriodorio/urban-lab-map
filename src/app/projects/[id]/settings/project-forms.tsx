@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 
 type ActionResult = { error?: string; success?: boolean };
 type BoundAction = (
@@ -110,6 +110,96 @@ export function RemoveMemberButton({
         Remove
       </button>
     </form>
+  );
+}
+
+export function PublishControls({
+  publicSlug,
+  publishAction,
+  unpublishAction,
+}: {
+  publicSlug: string | null;
+  publishAction: () => Promise<ActionResult>;
+  unpublishAction: () => Promise<ActionResult>;
+}) {
+  const [copied, setCopied] = useState(false);
+  const path = publicSlug ? `/p/${publicSlug}` : null;
+
+  // Composed on click rather than during render: the absolute URL depends on
+  // window.location, which differs between server and client and would other-
+  // wise mismatch on hydration.
+  async function copyLink() {
+    if (!path) return;
+    await navigator.clipboard.writeText(`${window.location.origin}${path}`);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  if (!publicSlug) {
+    return (
+      <form
+        action={async () => {
+          await publishAction();
+        }}
+        className="flex flex-col gap-2"
+      >
+        <p className="text-sm text-neutral-600">
+          Not published. Publishing creates a link that shows a read-only
+          version of this map to anyone who has it — no account needed.
+        </p>
+        <button
+          type="submit"
+          className="self-start rounded bg-black px-3 py-1.5 text-sm font-medium text-white"
+        >
+          Publish
+        </button>
+      </form>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      <p className="text-sm text-neutral-600">
+        Published. Anyone with this link can read the map:
+      </p>
+      <code className="overflow-x-auto rounded bg-neutral-100 px-2 py-1.5 text-xs">
+        {path}
+      </code>
+      <div className="flex items-center gap-4">
+        <button
+          onClick={copyLink}
+          className="text-sm text-blue-600 underline"
+        >
+          {copied ? "Copied." : "Copy link"}
+        </button>
+        <a
+          href={path ?? "#"}
+          target="_blank"
+          rel="noreferrer"
+          className="text-sm text-blue-600 underline"
+        >
+          Open
+        </a>
+        <form
+          action={async () => {
+            await unpublishAction();
+          }}
+          onSubmit={(e) => {
+            if (
+              !confirm(
+                "Unpublish this map? The existing link stops working immediately. Publishing again creates a new link."
+              )
+            ) {
+              e.preventDefault();
+            }
+          }}
+        >
+          <button type="submit" className="text-sm text-red-600 underline">
+            Unpublish
+          </button>
+        </form>
+      </div>
+    </div>
   );
 }
 

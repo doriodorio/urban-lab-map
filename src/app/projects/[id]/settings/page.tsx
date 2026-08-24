@@ -6,12 +6,15 @@ import {
   deleteProject,
   inviteMember,
   removeMember,
+  publishProject,
+  unpublishProject,
 } from "../actions";
 import {
   EditProjectForm,
   InviteMemberForm,
   RemoveMemberButton,
   DeleteProjectButton,
+  PublishControls,
 } from "./project-forms";
 
 export default async function ProjectSettingsPage({
@@ -31,7 +34,7 @@ export default async function ProjectSettingsPage({
 
   const { data: project } = await supabase
     .from("projects")
-    .select("id, name, description")
+    .select("id, name, description, public_slug")
     .eq("id", id)
     .maybeSingle();
 
@@ -54,12 +57,18 @@ export default async function ProjectSettingsPage({
 
   return (
     <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-8 px-6 py-12">
-      <div>
+      <div className="flex items-center gap-4">
         <Link
           href={`/projects/${project.id}`}
           className="text-sm text-neutral-500 underline"
         >
           ← Map
+        </Link>
+        <Link
+          href={`/projects/${project.id}/threads`}
+          className="text-sm text-neutral-500 underline"
+        >
+          Threads
         </Link>
       </div>
 
@@ -69,6 +78,17 @@ export default async function ProjectSettingsPage({
           action={updateProject.bind(null, project.id)}
           name={project.name}
           description={project.description}
+        />
+      </section>
+
+      <section className="flex flex-col gap-3">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-500">
+          Publishing
+        </h2>
+        <PublishControls
+          publicSlug={project.public_slug}
+          publishAction={publishProject.bind(null, project.id)}
+          unpublishAction={unpublishProject.bind(null, project.id)}
         />
       </section>
 

@@ -241,11 +241,13 @@ export function MapEditor({
   deletedItems,
   links,
   memberNames,
+  currentUserId,
   createLayerAction,
   deleteLayerAction,
   createItemAction,
   deleteItemAction,
   restoreItemAction,
+  purgeItemAction,
   updateItemLayerAction,
   updateItemTagsAction,
   createItemLinkAction,
@@ -259,11 +261,13 @@ export function MapEditor({
   deletedItems: (Item & { deleted_at: string | null })[];
   links: ItemLink[];
   memberNames: Record<string, string>;
+  currentUserId: string;
   createLayerAction: BoundAction;
   deleteLayerAction: (layerId: string) => Promise<ActionResult>;
   createItemAction: BoundAction;
   deleteItemAction: (itemId: string) => Promise<ActionResult>;
   restoreItemAction: (itemId: string) => Promise<ActionResult>;
+  purgeItemAction: (itemId: string) => Promise<ActionResult>;
   updateItemLayerAction: (
     itemId: string,
     layerId: string | null
@@ -718,6 +722,12 @@ export function MapEditor({
           </Link>
           <span className="text-sm font-medium">{project.name}</span>
           <Link
+            href={`/projects/${project.id}/threads`}
+            className="text-sm text-neutral-500 underline"
+          >
+            Threads
+          </Link>
+          <Link
             href={`/projects/${project.id}/settings`}
             className="text-sm text-neutral-500 underline"
           >
@@ -857,6 +867,8 @@ export function MapEditor({
           <TrashPanel
             deletedItems={deletedItems}
             restoreItemAction={restoreItemAction}
+            purgeItemAction={purgeItemAction}
+            currentUserId={currentUserId}
           />
         )}
 
@@ -1047,15 +1059,20 @@ function SearchBox({
 function TrashPanel({
   deletedItems,
   restoreItemAction,
+  purgeItemAction,
+  currentUserId,
 }: {
   deletedItems: (Item & { deleted_at: string | null })[];
   restoreItemAction: (itemId: string) => Promise<ActionResult>;
+  purgeItemAction: (itemId: string) => Promise<ActionResult>;
+  currentUserId: string;
 }) {
   return (
     <div className="flex flex-col gap-3 p-4">
       <p className="text-xs text-neutral-500">
-        Deleted items are kept here rather than destroyed, so a mistaken
-        delete can be undone by anyone in the project.
+        Deleted items are kept here indefinitely, so anyone in the project can
+        undo a mistaken delete. Only the person who added an item can remove
+        it for good.
       </p>
 
       {deletedItems.length === 0 && (
@@ -1077,18 +1094,46 @@ function TrashPanel({
               {item.deleted_at &&
                 ` · deleted ${new Date(item.deleted_at).toLocaleDateString()}`}
             </span>
-            <form
-              action={async () => {
-                await restoreItemAction(item.id);
-              }}
-            >
-              <button
-                type="submit"
-                className="text-xs text-blue-600 underline"
+            <div className="flex items-center gap-3">
+              <form
+                action={async () => {
+                  await restoreItemAction(item.id);
+                }}
               >
-                Restore
-              </button>
-            </form>
+                <button
+                  type="submit"
+                  className="text-xs text-blue-600 underline"
+                >
+                  Restore
+                </button>
+              </form>
+
+              {/* Only the creator can purge - matches the RLS policy, so an
+                  absent button and a blocked request agree with each other. */}
+              {item.created_by === currentUserId && (
+                <form
+                  action={async () => {
+                    await purgeItemAction(item.id);
+                  }}
+                  onSubmit={(e) => {
+                    if (
+                      !confirm(
+                        `Permanently delete "${item.title || "this item"}"? This also removes any uploaded files and cannot be undone.`
+                      )
+                    ) {
+                      e.preventDefault();
+                    }
+                  }}
+                >
+                  <button
+                    type="submit"
+                    className="text-xs text-neutral-400 underline hover:text-red-600"
+                  >
+                    Delete permanently
+                  </button>
+                </form>
+              )}
+            </div>
           </li>
         ))}
       </ul>

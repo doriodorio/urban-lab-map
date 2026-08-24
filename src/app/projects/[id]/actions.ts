@@ -32,6 +32,70 @@ export async function updateProject(
   return { success: true };
 }
 
+// Slugs are readable-but-unguessable: a name-derived prefix so a shared link
+// says what it is, plus random suffix so a published project can't be found
+// by guessing another group's project name.
+function slugify(name: string) {
+  const base = name
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 40);
+  const suffix = crypto.randomUUID().split("-")[0];
+  return base ? `${base}-${suffix}` : suffix;
+}
+
+export async function publishProject(projectId: string): Promise<ActionResult> {
+  const supabase = await createClient();
+
+  const { data: project, error: readError } = await supabase
+    .from("projects")
+    .select("name, public_slug")
+    .eq("id", projectId)
+    .maybeSingle();
+
+  if (readError) {
+    return { error: readError.message };
+  }
+  if (!project) {
+    return { error: "Project not found." };
+  }
+  // Keep an existing slug so re-publishing doesn't break links already shared.
+  if (project.public_slug) {
+    return { success: true };
+  }
+
+  const { error } = await supabase
+    .from("projects")
+    .update({ public_slug: slugify(project.name) })
+    .eq("id", projectId);
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  revalidatePath(`/projects/${projectId}/settings`);
+  return { success: true };
+}
+
+export async function unpublishProject(
+  projectId: string
+): Promise<ActionResult> {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("projects")
+    .update({ public_slug: null })
+    .eq("id", projectId);
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  revalidatePath(`/projects/${projectId}/settings`);
+  return { success: true };
+}
+
 export async function deleteProject(projectId: string) {
   const supabase = await createClient();
   const { error } = await supabase.from("projects").delete().eq("id", projectId);
