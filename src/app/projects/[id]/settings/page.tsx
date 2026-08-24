@@ -42,7 +42,14 @@ export default async function ProjectSettingsPage({
   const { data: members } = (await supabase.rpc("get_project_members", {
     p_project_id: id,
   })) as {
-    data: { user_id: string; email: string; role: string }[] | null;
+    data:
+      | {
+          user_id: string;
+          email: string;
+          role: string;
+          display_name: string | null;
+        }[]
+      | null;
   };
 
   return (
@@ -76,7 +83,14 @@ export default async function ProjectSettingsPage({
               className="flex items-center justify-between text-sm"
             >
               <span>
-                {member.email}
+                {member.display_name ? (
+                  <>
+                    {member.display_name}{" "}
+                    <span className="text-neutral-400">({member.email})</span>
+                  </>
+                ) : (
+                  member.email
+                )}
                 {member.role === "instructor" && (
                   <span className="ml-2 rounded bg-neutral-100 px-1.5 py-0.5 text-xs text-neutral-500">
                     instructor

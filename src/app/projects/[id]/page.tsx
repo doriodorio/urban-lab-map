@@ -116,10 +116,20 @@ export default async function ProjectMapPage({
   // names to show.
   const { data: members } = (await supabase.rpc("get_project_members", {
     p_project_id: id,
-  })) as { data: { user_id: string; email: string; role: string }[] | null };
+  })) as {
+    data:
+      | {
+          user_id: string;
+          email: string;
+          role: string;
+          display_name: string | null;
+        }[]
+      | null;
+  };
 
-  const memberEmails = Object.fromEntries(
-    (members ?? []).map((m) => [m.user_id, m.email])
+  // Prefer whatever the person chose to be called; fall back to their email.
+  const memberNames = Object.fromEntries(
+    (members ?? []).map((m) => [m.user_id, m.display_name || m.email])
   );
 
   return (
@@ -129,7 +139,7 @@ export default async function ProjectMapPage({
       items={items ?? []}
       deletedItems={deletedItems ?? []}
       links={links ?? []}
-      memberEmails={memberEmails}
+      memberNames={memberNames}
       createLayerAction={createLayer.bind(null, project.id)}
       deleteLayerAction={deleteLayer.bind(null, project.id)}
       createItemAction={createItem.bind(null, project.id)}

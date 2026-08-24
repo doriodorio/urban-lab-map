@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { signOut } from "./actions";
+import { signOut, updateDisplayName } from "./actions";
+import { DisplayNameForm } from "./display-name-form";
 
 export default async function ProjectsPage() {
   const supabase = await createClient();
@@ -13,10 +14,17 @@ export default async function ProjectsPage() {
     redirect("/login");
   }
 
-  const { data: projects, error } = await supabase
-    .from("projects")
-    .select("id, name, description, created_at")
-    .order("created_at", { ascending: false });
+  const [{ data: projects, error }, { data: profile }] = await Promise.all([
+    supabase
+      .from("projects")
+      .select("id, name, description, created_at")
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("profiles")
+      .select("display_name")
+      .eq("user_id", user.id)
+      .maybeSingle(),
+  ]);
 
   return (
     <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 px-6 py-12">
@@ -37,6 +45,15 @@ export default async function ProjectsPage() {
         >
           New project
         </Link>
+      </div>
+
+      <div className="flex flex-col gap-1 rounded border border-neutral-200 p-3">
+        <label className="text-sm font-medium">Display name</label>
+        <DisplayNameForm
+          action={updateDisplayName}
+          displayName={profile?.display_name ?? null}
+          email={user.email ?? ""}
+        />
       </div>
 
       {error && (
