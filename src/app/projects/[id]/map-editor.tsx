@@ -165,12 +165,12 @@ function bodyLabelFor(type: string) {
 
 function isVisible(
   item: Item,
-  activeLayerIds: Set<string>,
+  hiddenLayerIds: Set<string>,
   activeTags: Set<string>,
   dateFrom: string | null,
   dateTo: string | null
 ) {
-  if (!activeLayerIds.has(item.layer_id ?? "unassigned")) return false;
+  if (hiddenLayerIds.has(item.layer_id ?? "unassigned")) return false;
   if (activeTags.size > 0 && !(item.tags ?? []).some((t) => activeTags.has(t))) {
     return false;
   }
@@ -218,9 +218,10 @@ export function MapEditor({
   const mapRef = useRef<maplibregl.Map | null>(null);
   const markersRef = useRef<Map<string, maplibregl.Marker>>(new Map());
 
-  const [activeLayerIds, setActiveLayerIds] = useState<Set<string>>(
-    new Set(layers.map((l) => l.id).concat("unassigned"))
-  );
+  // Tracks which layers are *hidden* rather than which are shown, so a layer
+  // created after mount is visible by default - seeding a "visible" set from
+  // `layers` would only run once and leave every new layer switched off.
+  const [hiddenLayerIds, setHiddenLayerIds] = useState<Set<string>>(new Set());
   const [activeTags, setActiveTags] = useState<Set<string>>(new Set());
   const [dateFrom, setDateFrom] = useState<string | null>(null);
   const [dateTo, setDateTo] = useState<string | null>(null);
@@ -231,7 +232,13 @@ export function MapEditor({
     null
   );
 
-  const [selectedItem, setSelectedItem] = useState<Item | null>(null);
+  // Held as an id and resolved against the current `items` on every render.
+  // Storing the object itself would freeze a snapshot: marker click listeners
+  // are attached once per marker and would keep handing back the item as it
+  // looked when the marker was created, so edits made through the detail
+  // panel wouldn't show up on reopening it.
+  const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
+  const selectedItem = items.find((i) => i.id === selectedItemId) ?? null;
   const [panel, setPanel] = useState<"layers" | "filters" | "basemap" | null>(
     "layers"
   );
@@ -262,10 +269,18 @@ export function MapEditor({
     });
     map.addControl(new maplibregl.NavigationControl(), "top-right");
     mapRef.current = map;
+    const markers = markersRef.current;
 
     return () => {
       map.remove();
       mapRef.current = null;
+      // map.remove() destroys the markers' DOM along with the map, but the
+      // ref would still hold them. The marker effect treats a cache hit as
+      // "already on the map" and skips addTo(), so leaving stale entries here
+      // means every existing item silently fails to render on the next map -
+      // in dev that's StrictMode's remount, in production it's navigating
+      // away and back. Only items created after that point would appear.
+      markers.clear();
     };
     // Only the style picked at mount matters here - later changes go
     // through the dedicated setTiles() effect below, not a re-init.
@@ -311,12 +326,19 @@ export function MapEditor({
           [west, south],
         ],
       });
-      map.addLayer({
-        id: "base-map-overlay",
-        type: "raster",
-        source: "base-map-overlay",
-        paint: { "raster-opacity": 0.85 },
-      });
+      // Insert *below* the item shape layers. addLayer() appends to the top of
+      // the stack by default, so re-applying an overlay on an already-open map
+      // would otherwise paint it over every line and polygon item.
+      ensureShapeLayers(map);
+      map.addLayer(
+        {
+          id: "base-map-overlay",
+          type: "raster",
+          source: "base-map-overlay",
+          paint: { "raster-opacity": 0.85 },
+        },
+        "item-lines-layer"
+      );
     };
 
     if (map.isStyleLoaded()) applyOverlay();
@@ -364,26 +386,24 @@ export function MapEditor({
       e: maplibregl.MapLayerMouseEvent & { features?: maplibregl.MapGeoJSONFeature[] }
     ) => {
       const id = e.features?.[0]?.properties?.id;
-      const item = items.find((i) => i.id === id);
-      if (item) setSelectedItem(item);
+      if (typeof id === "string") setSelectedItemId(id);
+    };
+
+    const showPointer = () => {
+      map.getCanvas().style.cursor = "pointer";
+    };
+    const clearPointer = () => {
+      map.getCanvas().style.cursor = "";
     };
 
     const attach = () => {
       ensureShapeLayers(map);
       map.on("click", "item-lines-layer", onFeatureClick);
       map.on("click", "item-polygons-fill", onFeatureClick);
-      map.on("mouseenter", "item-lines-layer", () => {
-        map.getCanvas().style.cursor = "pointer";
-      });
-      map.on("mouseleave", "item-lines-layer", () => {
-        map.getCanvas().style.cursor = "";
-      });
-      map.on("mouseenter", "item-polygons-fill", () => {
-        map.getCanvas().style.cursor = "pointer";
-      });
-      map.on("mouseleave", "item-polygons-fill", () => {
-        map.getCanvas().style.cursor = "";
-      });
+      map.on("mouseenter", "item-lines-layer", showPointer);
+      map.on("mouseleave", "item-lines-layer", clearPointer);
+      map.on("mouseenter", "item-polygons-fill", showPointer);
+      map.on("mouseleave", "item-polygons-fill", clearPointer);
     };
 
     if (map.isStyleLoaded()) attach();
@@ -392,8 +412,15 @@ export function MapEditor({
     return () => {
       map.off("click", "item-lines-layer", onFeatureClick);
       map.off("click", "item-polygons-fill", onFeatureClick);
+      map.off("mouseenter", "item-lines-layer", showPointer);
+      map.off("mouseleave", "item-lines-layer", clearPointer);
+      map.off("mouseenter", "item-polygons-fill", showPointer);
+      map.off("mouseleave", "item-polygons-fill", clearPointer);
     };
-  }, [items]);
+    // Runs once: the handlers only close over setState, never over `items`,
+    // so there's nothing to re-bind when items change (and re-running would
+    // re-register the hover handlers on every edit).
+  }, []);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -459,7 +486,7 @@ export function MapEditor({
     }
 
     for (const item of pointItems) {
-      const visible = isVisible(item, activeLayerIds, activeTags, dateFrom, dateTo);
+      const visible = isVisible(item, hiddenLayerIds, activeTags, dateFrom, dateTo);
       let marker = markersRef.current.get(item.id);
 
       if (!marker) {
@@ -471,9 +498,13 @@ export function MapEditor({
         el.style.border = "2px solid white";
         el.style.boxShadow = "0 0 0 1px rgba(0,0,0,0.3)";
         el.style.cursor = "pointer";
+        // Capturing the id (stable) rather than the item object (a per-render
+        // snapshot) keeps this listener correct for the marker's whole life -
+        // it's attached once, on creation, and never re-bound.
+        const itemId = item.id;
         el.addEventListener("click", (ev) => {
           ev.stopPropagation();
-          setSelectedItem(item);
+          setSelectedItemId(itemId);
         });
 
         marker = new maplibregl.Marker({ element: el })
@@ -487,7 +518,7 @@ export function MapEditor({
       el.style.display = visible ? "block" : "none";
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items, activeLayerIds, activeTags, dateFrom, dateTo, layers]);
+  }, [items, hiddenLayerIds, activeTags, dateFrom, dateTo, layers]);
 
   // Render line/polygon items.
   useEffect(() => {
@@ -503,7 +534,7 @@ export function MapEditor({
       const polyFeatures: GeoJSON.Feature[] = [];
 
       for (const item of items) {
-        const visible = isVisible(item, activeLayerIds, activeTags, dateFrom, dateTo);
+        const visible = isVisible(item, hiddenLayerIds, activeTags, dateFrom, dateTo);
         if (!visible) continue;
 
         const color = layerColor(item.layer_id);
@@ -529,7 +560,7 @@ export function MapEditor({
     if (map.isStyleLoaded()) update();
     else map.once("load", update);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items, activeLayerIds, activeTags, dateFrom, dateTo, layers]);
+  }, [items, hiddenLayerIds, activeTags, dateFrom, dateTo, layers]);
 
   // Marker for a pending new Point item.
   useEffect(() => {
@@ -553,7 +584,7 @@ export function MapEditor({
   }, [pendingGeometry]);
 
   function toggleLayer(id: string) {
-    setActiveLayerIds((prev) => {
+    setHiddenLayerIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
@@ -699,7 +730,7 @@ export function MapEditor({
         {panel === "layers" && (
           <LayerPanel
             layers={layers}
-            activeLayerIds={activeLayerIds}
+            hiddenLayerIds={hiddenLayerIds}
             onToggle={toggleLayer}
             createLayerAction={createLayerAction}
             deleteLayerAction={deleteLayerAction}
@@ -739,12 +770,16 @@ export function MapEditor({
 
         {selectedItem && (
           <ItemDetail
+            // Remount per item: the panel seeds its layer/tag inputs from
+            // props in useState initializers, which would otherwise carry the
+            // previous item's values over when switching between markers.
+            key={selectedItem.id}
             item={selectedItem}
             layers={layers}
             deleteItemAction={deleteItemAction}
             updateItemLayerAction={updateItemLayerAction}
             updateItemTagsAction={updateItemTagsAction}
-            onClose={() => setSelectedItem(null)}
+            onClose={() => setSelectedItemId(null)}
           />
         )}
       </aside>
@@ -754,13 +789,13 @@ export function MapEditor({
 
 function LayerPanel({
   layers,
-  activeLayerIds,
+  hiddenLayerIds,
   onToggle,
   createLayerAction,
   deleteLayerAction,
 }: {
   layers: Layer[];
-  activeLayerIds: Set<string>;
+  hiddenLayerIds: Set<string>;
   onToggle: (id: string) => void;
   createLayerAction: BoundAction;
   deleteLayerAction: (layerId: string) => Promise<ActionResult>;
@@ -774,7 +809,7 @@ function LayerPanel({
           <li key={layer.id} className="flex items-center gap-2 text-sm">
             <input
               type="checkbox"
-              checked={activeLayerIds.has(layer.id)}
+              checked={!hiddenLayerIds.has(layer.id)}
               onChange={() => onToggle(layer.id)}
             />
             <span
