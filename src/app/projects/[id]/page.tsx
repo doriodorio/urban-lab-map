@@ -42,7 +42,7 @@ export default async function ProjectMapPage({
   }
 
   const itemColumns =
-    "id, layer_id, type, title, body, attribution, tags, date_start, media, geometry";
+    "id, layer_id, type, title, body, attribution, tags, date_start, media, geometry, created_by";
 
   const [layersResult, itemsResult, deletedItemsResult] = await Promise.all([
     supabase
@@ -110,6 +110,18 @@ export default async function ProjectMapPage({
         .in("item_a", allItemIds)
     : { data: [] };
 
+  // auth.users isn't reachable from PostgREST, so creator ids are resolved to
+  // emails through the same members RPC the settings page uses. Magic-link
+  // auth means an email is the only identity we have - there are no display
+  // names to show.
+  const { data: members } = (await supabase.rpc("get_project_members", {
+    p_project_id: id,
+  })) as { data: { user_id: string; email: string; role: string }[] | null };
+
+  const memberEmails = Object.fromEntries(
+    (members ?? []).map((m) => [m.user_id, m.email])
+  );
+
   return (
     <MapEditor
       project={project}
@@ -117,6 +129,7 @@ export default async function ProjectMapPage({
       items={items ?? []}
       deletedItems={deletedItems ?? []}
       links={links ?? []}
+      memberEmails={memberEmails}
       createLayerAction={createLayer.bind(null, project.id)}
       deleteLayerAction={deleteLayer.bind(null, project.id)}
       createItemAction={createItem.bind(null, project.id)}

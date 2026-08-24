@@ -23,6 +23,7 @@ type Item = {
   date_start: string | null;
   media: { url: string; type: string }[] | null;
   geometry: Geometry;
+  created_by: string | null;
 };
 type Project = {
   id: string;
@@ -239,6 +240,7 @@ export function MapEditor({
   items,
   deletedItems,
   links,
+  memberEmails,
   createLayerAction,
   deleteLayerAction,
   createItemAction,
@@ -256,6 +258,7 @@ export function MapEditor({
   items: Item[];
   deletedItems: (Item & { deleted_at: string | null })[];
   links: ItemLink[];
+  memberEmails: Record<string, string>;
   createLayerAction: BoundAction;
   deleteLayerAction: (layerId: string) => Promise<ActionResult>;
   createItemAction: BoundAction;
@@ -878,6 +881,7 @@ export function MapEditor({
             layers={layers}
             allItems={items}
             linked={linkedItemsFor(selectedItem.id, links, items)}
+            memberEmails={memberEmails}
             deleteItemAction={deleteItemAction}
             updateItemLayerAction={updateItemLayerAction}
             updateItemTagsAction={updateItemTagsAction}
@@ -1398,6 +1402,7 @@ function ItemDetail({
   layers,
   allItems,
   linked,
+  memberEmails,
   deleteItemAction,
   updateItemLayerAction,
   updateItemTagsAction,
@@ -1410,6 +1415,7 @@ function ItemDetail({
   layers: Layer[];
   allItems: Item[];
   linked: { link: ItemLink; other: Item }[];
+  memberEmails: Record<string, string>;
   deleteItemAction: (itemId: string) => Promise<ActionResult>;
   updateItemLayerAction: (
     itemId: string,
@@ -1550,6 +1556,12 @@ function ItemDetail({
       {item.date_start && (
         <p className="text-xs text-neutral-400">{item.date_start}</p>
       )}
+
+      <p className="text-xs text-neutral-400">
+        {item.created_by
+          ? `Added by ${memberEmails[item.created_by] ?? "a former member"}`
+          : "Added before authorship was recorded"}
+      </p>
 
       <label className="flex flex-col gap-1 text-xs text-neutral-500">
         Tags

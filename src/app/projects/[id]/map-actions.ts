@@ -110,6 +110,9 @@ export async function createItem(
   }
 
   const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   const media: { url: string; type: string }[] = [];
   try {
@@ -142,6 +145,7 @@ export async function createItem(
     tags,
     date_start: dateStart || null,
     media,
+    created_by: user?.id ?? null,
   });
 
   if (error) {
