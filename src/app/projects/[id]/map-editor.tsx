@@ -657,6 +657,10 @@ export function MapEditor({
     });
   }
 
+  const visibleItems = items.filter((i) =>
+    isVisible(i, hiddenLayerIds, activeTags, dateFrom, dateTo, query)
+  );
+
   // Select an item and bring it into view - used by search results and by
   // following a link, where the target is often off-screen.
   function focusItem(item: Item) {
@@ -778,6 +782,16 @@ export function MapEditor({
       </div>
 
       <aside className="flex w-80 flex-col overflow-y-auto border-l border-neutral-200 bg-white">
+        {/* Search sits above the tabs rather than inside Filters: it's reached
+            constantly, and shouldn't cost a tab switch to get to. */}
+        <SearchBox
+          query={query}
+          onQueryChange={setQuery}
+          results={visibleItems}
+          totalCount={items.length}
+          onSelectResult={focusItem}
+        />
+
         <div className="flex border-b border-neutral-200 text-sm">
           <button
             onClick={() => setPanel("layers")}
@@ -825,19 +839,6 @@ export function MapEditor({
             dateTo={dateTo}
             onDateFromChange={setDateFrom}
             onDateToChange={setDateTo}
-            query={query}
-            onQueryChange={setQuery}
-            results={items.filter((i) =>
-              isVisible(
-                i,
-                hiddenLayerIds,
-                activeTags,
-                dateFrom,
-                dateTo,
-                query
-              )
-            )}
-            onSelectResult={focusItem}
           />
         )}
 
@@ -981,6 +982,64 @@ function LayerPanel({
   );
 }
 
+function SearchBox({
+  query,
+  onQueryChange,
+  results,
+  totalCount,
+  onSelectResult,
+}: {
+  query: string;
+  onQueryChange: (v: string) => void;
+  results: Item[];
+  totalCount: number;
+  onSelectResult: (item: Item) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-2 border-b border-neutral-200 p-3">
+      <div className="relative">
+        <input
+          type="search"
+          value={query}
+          onChange={(e) => onQueryChange(e.target.value)}
+          placeholder="Search title, text, source, tag…"
+          className="w-full rounded border border-neutral-300 px-2 py-1.5 text-sm"
+        />
+      </div>
+
+      {/* Only takes up space once there's something to show - an always-open
+          result list would push the panels below it off-screen. */}
+      {query && (
+        <>
+          <p className="text-xs text-neutral-400">
+            {results.length} of {totalCount} shown on the map
+          </p>
+          <ul className="flex max-h-64 flex-col overflow-y-auto">
+            {results.slice(0, 50).map((item) => (
+              <li key={item.id}>
+                <button
+                  onClick={() => onSelectResult(item)}
+                  className="w-full truncate py-1 text-left text-sm text-blue-600 underline"
+                >
+                  {item.title || "Untitled"}
+                </button>
+              </li>
+            ))}
+          </ul>
+          {results.length === 0 && (
+            <p className="text-sm text-neutral-400">No matches.</p>
+          )}
+          {results.length > 50 && (
+            <p className="text-xs text-neutral-400">
+              Showing the first 50 — narrow the search to see more.
+            </p>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 function TrashPanel({
   deletedItems,
   restoreItemAction,
@@ -1041,10 +1100,6 @@ function FiltersPanel({
   dateTo,
   onDateFromChange,
   onDateToChange,
-  query,
-  onQueryChange,
-  results,
-  onSelectResult,
 }: {
   items: Item[];
   activeTags: Set<string>;
@@ -1053,10 +1108,6 @@ function FiltersPanel({
   dateTo: string | null;
   onDateFromChange: (v: string | null) => void;
   onDateToChange: (v: string | null) => void;
-  query: string;
-  onQueryChange: (v: string) => void;
-  results: Item[];
-  onSelectResult: (item: Item) => void;
 }) {
   const allTags = Array.from(
     new Set(items.flatMap((i) => i.tags ?? []))
@@ -1065,41 +1116,6 @@ function FiltersPanel({
   return (
     <div className="flex flex-col gap-5 p-4">
       <div className="flex flex-col gap-2">
-        <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
-          Search
-        </p>
-        <input
-          type="search"
-          value={query}
-          onChange={(e) => onQueryChange(e.target.value)}
-          placeholder="Title, text, source, tag…"
-          className="rounded border border-neutral-300 px-2 py-1.5 text-sm"
-        />
-        <p className="text-xs text-neutral-400">
-          {query
-            ? `${results.length} of ${items.length} shown on the map`
-            : `${results.length} items shown on the map`}
-        </p>
-        <ul className="flex flex-col">
-          {results.slice(0, 50).map((item) => (
-            <li key={item.id}>
-              <button
-                onClick={() => onSelectResult(item)}
-                className="w-full truncate py-1 text-left text-sm text-blue-600 underline"
-              >
-                {item.title || "Untitled"}
-              </button>
-            </li>
-          ))}
-        </ul>
-        {results.length > 50 && (
-          <p className="text-xs text-neutral-400">
-            Showing the first 50 — narrow the search to see more.
-          </p>
-        )}
-      </div>
-
-      <div className="flex flex-col gap-2 border-t border-neutral-200 pt-4">
         <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
           Tags
         </p>
