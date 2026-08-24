@@ -37,18 +37,60 @@ type BoundAction = (
   formData: FormData
 ) => Promise<ActionResult>;
 
-const OSM_STYLE: maplibregl.StyleSpecification = {
-  version: 8,
-  sources: {
-    osm: {
-      type: "raster",
-      tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
-      tileSize: 256,
-      attribution: "&copy; OpenStreetMap contributors",
-    },
+const MAP_STYLES: { id: string; label: string; tiles: string[]; maxzoom?: number }[] = [
+  {
+    id: "osm",
+    label: "Streets",
+    tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
   },
-  layers: [{ id: "osm", type: "raster", source: "osm" }],
-};
+  {
+    id: "light",
+    label: "Light (minimal)",
+    tiles: ["https://basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png"],
+  },
+  {
+    id: "dark",
+    label: "Dark",
+    tiles: ["https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png"],
+  },
+  {
+    id: "satellite",
+    label: "Satellite",
+    tiles: [
+      "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+    ],
+    maxzoom: 19,
+  },
+  {
+    id: "terrain",
+    label: "Terrain",
+    tiles: ["https://tile.opentopomap.org/{z}/{x}/{y}.png"],
+    maxzoom: 17,
+  },
+];
+
+// Combined upfront so it stays accurate regardless of which style is active -
+// the base source's attribution string isn't dynamically updatable via
+// setTiles(), only its tile URLs are.
+const COMBINED_ATTRIBUTION =
+  "&copy; OpenStreetMap contributors, &copy; CARTO, &copy; OpenTopoMap (SRTM), Esri World Imagery";
+
+function buildBaseStyle(styleId: string): maplibregl.StyleSpecification {
+  const style = MAP_STYLES.find((s) => s.id === styleId) ?? MAP_STYLES[0];
+  return {
+    version: 8,
+    sources: {
+      base: {
+        type: "raster",
+        tiles: style.tiles,
+        tileSize: 256,
+        maxzoom: style.maxzoom,
+        attribution: COMBINED_ATTRIBUTION,
+      },
+    },
+    layers: [{ id: "base", type: "raster", source: "base" }],
+  };
+}
 
 const DEFAULT_CENTER: [number, number] = [34.78, 32.07]; // Tel Aviv-ish, reasonable default for Bezalel
 
@@ -193,6 +235,7 @@ export function MapEditor({
   const [panel, setPanel] = useState<"layers" | "filters" | "basemap" | null>(
     "layers"
   );
+  const [mapStyleId, setMapStyleId] = useState(MAP_STYLES[0].id);
 
   const layerColor = (layerId: string | null) =>
     layers.find((l) => l.id === layerId)?.color || UNASSIGNED_COLOR;
@@ -213,7 +256,7 @@ export function MapEditor({
 
     const map = new maplibregl.Map({
       container: mapContainer.current,
-      style: OSM_STYLE,
+      style: buildBaseStyle(mapStyleId),
       center: DEFAULT_CENTER,
       zoom: 12,
     });
@@ -224,7 +267,27 @@ export function MapEditor({
       map.remove();
       mapRef.current = null;
     };
+    // Only the style picked at mount matters here - later changes go
+    // through the dedicated setTiles() effect below, not a re-init.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Swap the base layer's tile URLs when the user picks a different style.
+  // Uses setTiles() rather than map.setStyle() so our own sources/layers
+  // (items, draw preview, base-map overlay) never get torn down.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    const style = MAP_STYLES.find((s) => s.id === mapStyleId) ?? MAP_STYLES[0];
+    const apply = () => {
+      const source = map.getSource("base") as maplibregl.RasterTileSource | undefined;
+      source?.setTiles(style.tiles);
+    };
+
+    if (map.isStyleLoaded()) apply();
+    else map.once("load", apply);
+  }, [mapStyleId]);
 
   // Custom base-map image overlay.
   useEffect(() => {
@@ -550,6 +613,17 @@ export function MapEditor({
           >
             Settings
           </Link>
+          <select
+            value={mapStyleId}
+            onChange={(e) => setMapStyleId(e.target.value)}
+            className="rounded border border-neutral-300 px-1.5 py-1 text-sm"
+          >
+            {MAP_STYLES.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.label}
+              </option>
+            ))}
+          </select>
         </div>
 
         <div className="absolute bottom-3 left-3 flex flex-col gap-2">
