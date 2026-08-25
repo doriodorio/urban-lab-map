@@ -39,3 +39,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Source material staged for import (originals live on Dori's machine and in
+# Drive; the app's copies live in Supabase Storage). Keeping multi-MB photos
+# out of git.
+/charityboxes/
+/urbanlabmaptool from zip/
