@@ -1231,6 +1231,10 @@ function ImportPanel({
           status: "uploading",
           located: Boolean(prepared.coordinates),
         });
+        const notes = [
+          prepared.converted ? "converted from HEIC" : null,
+          prepared.resized ? "scaled to 2400px" : null,
+        ].filter(Boolean);
 
         // Goes through the same server action as a hand-made item, so
         // validation, storage and authorship all behave identically.
@@ -1248,9 +1252,10 @@ function ImportPanel({
         } else {
           update({
             status: "done",
-            detail: prepared.coordinates
-              ? "placed from photo"
-              : "needs placing",
+            detail: [
+              prepared.coordinates ? "placed from photo" : "needs placing",
+              ...notes,
+            ].join(" · "),
           });
         }
       } catch (e) {
@@ -1574,14 +1579,14 @@ function NewItemForm({
   );
   const [checkingExif, setCheckingExif] = useState(false);
   const [exifChecked, setExifChecked] = useState(false);
-  const [convertedName, setConvertedName] = useState<string | null>(null);
+  const [photoNote, setPhotoNote] = useState<string | null>(null);
 
   async function handleImageChange(e: React.ChangeEvent<HTMLInputElement>) {
     const input = e.currentTarget;
     const file = input.files?.[0];
     setPhotoCoords(null);
     setExifChecked(false);
-    setConvertedName(null);
+    setPhotoNote(null);
     if (!file) return;
 
     setCheckingExif(true);
@@ -1589,14 +1594,22 @@ function NewItemForm({
       const prepared = await preparePhoto(file);
       if (prepared.coordinates) setPhotoCoords(prepared.coordinates);
 
-      // A HEIC has to be swapped for the converted JPEG before submit -
-      // browsers can't display the original, so uploading it as-is would
-      // store an image nobody can see.
-      if (prepared.converted) {
+      // Swap in the prepared file before submit. A HEIC can't be displayed by
+      // any browser, and a full-resolution original is far larger than the
+      // map ever needs - so whichever applies, the original shouldn't be what
+      // gets uploaded.
+      if (prepared.converted || prepared.resized) {
         const dt = new DataTransfer();
         dt.items.add(prepared.file);
         input.files = dt.files;
-        setConvertedName(prepared.file.name);
+        setPhotoNote(
+          [
+            prepared.converted ? "Converted from HEIC so browsers can show it" : null,
+            prepared.resized ? "scaled down to 2400px" : null,
+          ]
+            .filter(Boolean)
+            .join(", ") + "."
+        );
       }
     } catch {
       // Unreadable metadata or a failed conversion: leave the original file
@@ -1723,10 +1736,8 @@ function NewItemForm({
       {checkingExif && (
         <p className="text-xs text-neutral-400">Reading photo…</p>
       )}
-      {convertedName && !checkingExif && (
-        <p className="text-xs text-neutral-500">
-          Converted to JPEG — browsers can&apos;t display HEIC.
-        </p>
+      {photoNote && !checkingExif && (
+        <p className="text-xs text-neutral-500">{photoNote}</p>
       )}
       {exifChecked && !checkingExif && !photoCoords && showImage && (
         <p className="text-xs text-neutral-400">
