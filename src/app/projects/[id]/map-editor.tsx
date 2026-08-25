@@ -5,7 +5,7 @@ import { useActionState } from "react";
 import Link from "next/link";
 import * as maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
-import { gps as exifGps } from "exifr";
+import { preparePhoto } from "./photo-import";
 
 type Layer = { id: string; name: string; color: string | null };
 type Geometry =
@@ -328,7 +328,7 @@ export function MapEditor({
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const selectedItem = items.find((i) => i.id === selectedItemId) ?? null;
   const [panel, setPanel] = useState<
-    "layers" | "filters" | "basemap" | "trash" | null
+    "layers" | "filters" | "import" | "basemap" | "trash" | null
   >("layers");
   const [mapStyleId, setMapStyleId] = useState(MAP_STYLES[0].id);
 
@@ -904,6 +904,12 @@ export function MapEditor({
             Filters
           </button>
           <button
+            onClick={() => setPanel("import")}
+            className={`flex-1 py-2 ${panel === "import" ? "font-semibold" : "text-neutral-400"}`}
+          >
+            Import
+          </button>
+          <button
             onClick={() => setPanel("basemap")}
             className={`flex-1 py-2 ${panel === "basemap" ? "font-semibold" : "text-neutral-400"}`}
           >
@@ -937,6 +943,17 @@ export function MapEditor({
             dateTo={dateTo}
             onDateFromChange={setDateFrom}
             onDateToChange={setDateTo}
+          />
+        )}
+
+        {panel === "import" && (
+          <ImportPanel
+            layers={layers}
+            createItemAction={createItemAction}
+            mapCenter={() => {
+              const c = mapRef.current?.getCenter();
+              return c ? ([c.lng, c.lat] as [number, number]) : DEFAULT_CENTER;
+            }}
           />
         )}
 
@@ -1138,6 +1155,212 @@ function SearchBox({
               Showing the first 50 — narrow the search to see more.
             </p>
           )}
+        </>
+      )}
+    </div>
+  );
+}
+
+type ImportRow = {
+  name: string;
+  status: "waiting" | "reading" | "uploading" | "done" | "skipped" | "error";
+  detail?: string;
+  located?: boolean;
+};
+
+function ImportPanel({
+  layers,
+  createItemAction,
+  mapCenter,
+}: {
+  layers: Layer[];
+  createItemAction: BoundAction;
+  mapCenter: () => [number, number];
+}) {
+  const [files, setFiles] = useState<File[]>([]);
+  const [layerId, setLayerId] = useState("");
+  const [includeUnlocated, setIncludeUnlocated] = useState(true);
+  const [rows, setRows] = useState<ImportRow[]>([]);
+  const [running, setRunning] = useState(false);
+
+  // Photos with no GPS all land wherever the map is centred. Stacking them on
+  // the exact same point would make every marker but the top one impossible
+  // to grab, so they're fanned out on a small spiral - close enough to read as
+  // "these still need placing", far enough apart to drag individually.
+  function spiralOffset(n: number, center: [number, number]): [number, number] {
+    const golden = 2.399963;
+    const radius = 0.00012 * Math.sqrt(n + 1);
+    return [
+      center[0] + radius * Math.cos(n * golden),
+      center[1] + radius * Math.sin(n * golden),
+    ];
+  }
+
+  async function runImport() {
+    if (!files.length || running) return;
+    setRunning(true);
+
+    const center = mapCenter();
+    let unlocatedCount = 0;
+    const next: ImportRow[] = files.map((f) => ({
+      name: f.name,
+      status: "waiting",
+    }));
+    setRows([...next]);
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const update = (patch: Partial<ImportRow>) => {
+        next[i] = { ...next[i], ...patch };
+        setRows([...next]);
+      };
+
+      try {
+        update({ status: "reading" });
+        const prepared = await preparePhoto(file);
+
+        if (!prepared.coordinates && !includeUnlocated) {
+          update({ status: "skipped", detail: "no location" });
+          continue;
+        }
+
+        const coordinates =
+          prepared.coordinates ?? spiralOffset(unlocatedCount++, center);
+
+        update({
+          status: "uploading",
+          located: Boolean(prepared.coordinates),
+        });
+
+        // Goes through the same server action as a hand-made item, so
+        // validation, storage and authorship all behave identically.
+        const form = new FormData();
+        form.set("title", file.name.replace(/\.[^.]+$/, ""));
+        form.set("type", "image");
+        form.set("layer_id", layerId);
+        form.set("geometry", JSON.stringify({ type: "Point", coordinates }));
+        form.set("image", prepared.file);
+        if (prepared.date) form.set("date_start", prepared.date);
+
+        const result = await createItemAction({}, form);
+        if (result.error) {
+          update({ status: "error", detail: result.error });
+        } else {
+          update({
+            status: "done",
+            detail: prepared.coordinates
+              ? "placed from photo"
+              : "needs placing",
+          });
+        }
+      } catch (e) {
+        update({
+          status: "error",
+          detail: e instanceof Error ? e.message : "failed",
+        });
+      }
+    }
+
+    setRunning(false);
+  }
+
+  const done = rows.filter((r) => r.status === "done").length;
+  const located = rows.filter((r) => r.located).length;
+  const failed = rows.filter((r) => r.status === "error").length;
+
+  return (
+    <div className="flex flex-col gap-3 p-4">
+      <p className="text-xs text-neutral-500">
+        Add a folder of photos at once. Each becomes its own image item, placed
+        from the photo&apos;s own GPS where it has any. HEIC files are converted
+        to JPEG, since browsers can&apos;t display them.
+      </p>
+
+      <input
+        type="file"
+        accept="image/*,.heic,.heif"
+        multiple
+        disabled={running}
+        onChange={(e) => {
+          setFiles(Array.from(e.target.files ?? []));
+          setRows([]);
+        }}
+        className="text-sm"
+      />
+
+      <select
+        value={layerId}
+        onChange={(e) => setLayerId(e.target.value)}
+        disabled={running}
+        className="rounded border border-neutral-300 px-2 py-1.5 text-sm"
+      >
+        <option value="">No layer</option>
+        {layers.map((l) => (
+          <option key={l.id} value={l.id}>
+            {l.name}
+          </option>
+        ))}
+      </select>
+
+      <label className="flex items-start gap-2 text-xs text-neutral-600">
+        <input
+          type="checkbox"
+          checked={includeUnlocated}
+          onChange={(e) => setIncludeUnlocated(e.target.checked)}
+          disabled={running}
+          className="mt-0.5"
+        />
+        <span>
+          Also add photos with no GPS, near the middle of the current map view.
+          They&apos;ll need dragging into place.
+        </span>
+      </label>
+
+      <button
+        onClick={runImport}
+        disabled={running || files.length === 0}
+        className="rounded bg-black px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+      >
+        {running
+          ? `Importing… ${done + failed} of ${files.length}`
+          : files.length
+          ? `Import ${files.length} photo${files.length === 1 ? "" : "s"}`
+          : "Choose photos first"}
+      </button>
+
+      {rows.length > 0 && (
+        <>
+          <p className="text-xs text-neutral-500">
+            {done} added ({located} placed from GPS)
+            {failed > 0 && `, ${failed} failed`}
+          </p>
+          <ul className="flex max-h-64 flex-col gap-1 overflow-y-auto">
+            {rows.map((row, i) => (
+              <li key={`${row.name}-${i}`} className="flex flex-col text-xs">
+                <span className="truncate">
+                  {row.status === "done"
+                    ? "✓"
+                    : row.status === "error"
+                    ? "✕"
+                    : row.status === "skipped"
+                    ? "–"
+                    : "…"}{" "}
+                  {row.name}
+                </span>
+                {row.detail && (
+                  <span
+                    className={`pl-4 ${
+                      row.status === "error"
+                        ? "text-red-600"
+                        : "text-neutral-400"
+                    }`}
+                  >
+                    {row.detail}
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
         </>
       )}
     </div>
@@ -1351,19 +1574,33 @@ function NewItemForm({
   );
   const [checkingExif, setCheckingExif] = useState(false);
   const [exifChecked, setExifChecked] = useState(false);
+  const [convertedName, setConvertedName] = useState<string | null>(null);
 
   async function handleImageChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
+    const input = e.currentTarget;
+    const file = input.files?.[0];
     setPhotoCoords(null);
     setExifChecked(false);
+    setConvertedName(null);
     if (!file) return;
 
     setCheckingExif(true);
     try {
-      const gps = await exifGps(file);
-      if (gps) setPhotoCoords([gps.longitude, gps.latitude]);
+      const prepared = await preparePhoto(file);
+      if (prepared.coordinates) setPhotoCoords(prepared.coordinates);
+
+      // A HEIC has to be swapped for the converted JPEG before submit -
+      // browsers can't display the original, so uploading it as-is would
+      // store an image nobody can see.
+      if (prepared.converted) {
+        const dt = new DataTransfer();
+        dt.items.add(prepared.file);
+        input.files = dt.files;
+        setConvertedName(prepared.file.name);
+      }
     } catch {
-      // No GPS data, or not a format exifr can read.
+      // Unreadable metadata or a failed conversion: leave the original file
+      // in place rather than blocking the upload.
     } finally {
       setCheckingExif(false);
       setExifChecked(true);
@@ -1484,7 +1721,12 @@ function NewItemForm({
       )}
 
       {checkingExif && (
-        <p className="text-xs text-neutral-400">Checking photo for GPS data…</p>
+        <p className="text-xs text-neutral-400">Reading photo…</p>
+      )}
+      {convertedName && !checkingExif && (
+        <p className="text-xs text-neutral-500">
+          Converted to JPEG — browsers can&apos;t display HEIC.
+        </p>
       )}
       {exifChecked && !checkingExif && !photoCoords && showImage && (
         <p className="text-xs text-neutral-400">
