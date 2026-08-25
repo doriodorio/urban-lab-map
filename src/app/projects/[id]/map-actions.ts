@@ -75,6 +75,76 @@ const VALID_TYPES = [
   "composite",
 ];
 
+type ValidGeometry =
+  | { type: "Point"; coordinates: [number, number] }
+  | { type: "LineString"; coordinates: [number, number][] }
+  | { type: "Polygon"; coordinates: [number, number][][] };
+
+function isPosition(value: unknown): value is [number, number] {
+  return (
+    Array.isArray(value) &&
+    value.length === 2 &&
+    typeof value[0] === "number" &&
+    typeof value[1] === "number" &&
+    Number.isFinite(value[0]) &&
+    Number.isFinite(value[1]) &&
+    value[0] >= -180 &&
+    value[0] <= 180 &&
+    value[1] >= -90 &&
+    value[1] <= 90
+  );
+}
+
+/**
+ * Checks a geometry is actually one of the three shapes the map can draw.
+ *
+ * The column is `jsonb not null`, which accepts any valid JSON - so without
+ * this, `"hello"` or `{}` inserts happily and then renders as nothing at all:
+ * the editor matches on `geometry.type`, finds no branch, and draws neither a
+ * marker nor a shape. The item exists, counts toward the project, and can't
+ * be seen, selected or deleted through the UI. Better to reject it here.
+ */
+function parseGeometry(raw: string): ValidGeometry | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+
+  if (!parsed || typeof parsed !== "object") return null;
+  const geometry = parsed as { type?: unknown; coordinates?: unknown };
+
+  if (geometry.type === "Point") {
+    return isPosition(geometry.coordinates)
+      ? { type: "Point", coordinates: geometry.coordinates }
+      : null;
+  }
+
+  if (geometry.type === "LineString") {
+    const line = geometry.coordinates;
+    if (!Array.isArray(line) || line.length < 2) return null;
+    if (!line.every(isPosition)) return null;
+    return { type: "LineString", coordinates: line };
+  }
+
+  if (geometry.type === "Polygon") {
+    const rings = geometry.coordinates;
+    if (!Array.isArray(rings) || rings.length === 0) return null;
+    for (const ring of rings) {
+      // A closed ring needs at least a triangle plus the repeated first point.
+      if (!Array.isArray(ring) || ring.length < 4) return null;
+      if (!ring.every(isPosition)) return null;
+      const first = ring[0];
+      const last = ring[ring.length - 1];
+      if (first[0] !== last[0] || first[1] !== last[1]) return null;
+    }
+    return { type: "Polygon", coordinates: rings };
+  }
+
+  return null;
+}
+
 export async function createItem(
   projectId: string,
   _prevState: ActionResult,
@@ -102,11 +172,9 @@ export async function createItem(
   if (!VALID_TYPES.includes(type)) {
     return { error: "Invalid item type." };
   }
-  let geometry: { type: string; coordinates: unknown };
-  try {
-    geometry = JSON.parse(geometryRaw);
-  } catch {
-    return { error: "Missing map location." };
+  const geometry = parseGeometry(geometryRaw);
+  if (!geometry) {
+    return { error: "Missing or invalid map location." };
   }
 
   const supabase = await createClient();
