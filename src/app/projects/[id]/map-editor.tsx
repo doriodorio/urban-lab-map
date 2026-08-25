@@ -44,25 +44,52 @@ type BoundAction = (
   formData: FormData
 ) => Promise<ActionResult>;
 
-const MAP_STYLES: { id: string; label: string; tiles: string[]; maxzoom?: number }[] = [
+/**
+ * Base maps come in two kinds.
+ *
+ * Raster styles are pre-rendered images: simple, but each has a zoom ceiling,
+ * and past it the map is an upscaled picture - fine for context, mushy for
+ * reading a street name.
+ *
+ * Vector styles ship geometry and labels that are drawn in the browser, so
+ * text stays sharp at any zoom. They're a whole style document rather than a
+ * tile URL, which is why switching to one costs a full setStyle (see the
+ * switch effect). OpenFreeMap serves them from OSM data with no key and no
+ * usage cap, which is what makes it usable for a class of students.
+ */
+type MapStyle =
+  | { id: string; label: string; kind: "raster"; tiles: string[]; maxzoom?: number }
+  | { id: string; label: string; kind: "vector"; url: string };
+
+const MAP_STYLES: MapStyle[] = [
   {
-    id: "osm",
-    label: "Streets",
-    tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
+    id: "streets",
+    label: "Streets (sharp)",
+    kind: "vector",
+    url: "https://tiles.openfreemap.org/styles/liberty",
   },
   {
-    id: "light",
-    label: "Light (minimal)",
-    tiles: ["https://basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png"],
+    id: "minimal",
+    label: "Minimal (sharp)",
+    kind: "vector",
+    url: "https://tiles.openfreemap.org/styles/positron",
+  },
+  {
+    id: "osm",
+    label: "OSM raster",
+    kind: "raster",
+    tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
   },
   {
     id: "dark",
     label: "Dark",
+    kind: "raster",
     tiles: ["https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png"],
   },
   {
     id: "satellite",
     label: "Satellite",
+    kind: "raster",
     tiles: [
       "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
     ],
@@ -71,19 +98,25 @@ const MAP_STYLES: { id: string; label: string; tiles: string[]; maxzoom?: number
   {
     id: "terrain",
     label: "Terrain",
+    kind: "raster",
     tiles: ["https://tile.opentopomap.org/{z}/{x}/{y}.png"],
     maxzoom: 17,
   },
 ];
 
-// Combined upfront so it stays accurate regardless of which style is active -
-// the base source's attribution string isn't dynamically updatable via
-// setTiles(), only its tile URLs are.
-const COMBINED_ATTRIBUTION =
+const DEFAULT_STYLE_ID = "streets";
+
+// Only covers the raster sources. Vector styles carry their own attribution
+// in the style document, which MapLibre picks up automatically.
+const RASTER_ATTRIBUTION =
   "&copy; OpenStreetMap contributors, &copy; CARTO, &copy; OpenTopoMap (SRTM), Esri World Imagery";
 
-function buildBaseStyle(styleId: string): maplibregl.StyleSpecification {
-  const style = MAP_STYLES.find((s) => s.id === styleId) ?? MAP_STYLES[0];
+function findStyle(styleId: string): MapStyle {
+  return MAP_STYLES.find((s) => s.id === styleId) ?? MAP_STYLES[0];
+}
+
+function buildRasterStyle(style: MapStyle): maplibregl.StyleSpecification {
+  if (style.kind !== "raster") throw new Error("not a raster style");
   return {
     version: 8,
     sources: {
@@ -92,7 +125,7 @@ function buildBaseStyle(styleId: string): maplibregl.StyleSpecification {
         tiles: style.tiles,
         tileSize: 256,
         maxzoom: style.maxzoom,
-        attribution: COMBINED_ATTRIBUTION,
+        attribution: RASTER_ATTRIBUTION,
       },
     },
     layers: [{ id: "base", type: "raster", source: "base" }],
@@ -100,6 +133,29 @@ function buildBaseStyle(styleId: string): maplibregl.StyleSpecification {
 }
 
 const DEFAULT_CENTER: [number, number] = [34.78, 32.07]; // Tel Aviv-ish, reasonable default for Bezalel
+
+/**
+ * Loads the right-to-left text plugin, without which Hebrew and Arabic labels
+ * render in logical order - which reads as backwards on screen.
+ *
+ * Only vector styles need this. Raster tiles arrive as pictures with the text
+ * already drawn correctly by the tile server; vector styles ship the strings
+ * and shape them in the browser, so the shaping has to happen here.
+ *
+ * Self-hosted rather than loaded from a CDN: the plugin is fetched by the
+ * MapLibre worker, and a Hebrew-first cohort shouldn't have legible labels
+ * depend on a third-party host staying up. Loaded eagerly, not lazily -
+ * `lazy: true` defers until RTL text appears, which means the first Hebrew
+ * labels render wrong and then correct themselves.
+ */
+function ensureRtlTextSupport() {
+  if (maplibregl.getRTLTextPluginStatus() !== "unavailable") return;
+  maplibregl
+    .setRTLTextPlugin("/mapbox-gl-rtl-text.js", false)
+    .catch(() => {
+      // Labels fall back to unshaped RTL rather than the map failing to load.
+    });
+}
 
 // Idempotent: safe to call from multiple effects regardless of ordering, so
 // nothing that needs these sources ever silently no-ops because it ran
@@ -330,7 +386,11 @@ export function MapEditor({
   const [panel, setPanel] = useState<
     "layers" | "filters" | "import" | "basemap" | "trash" | null
   >("layers");
-  const [mapStyleId, setMapStyleId] = useState(MAP_STYLES[0].id);
+  const [mapStyleId, setMapStyleId] = useState(DEFAULT_STYLE_ID);
+  // Bumped whenever setStyle() replaces the whole style, which discards every
+  // source and layer we added. Effects that build our own layers depend on it
+  // so they re-run and put everything back.
+  const [styleEpoch, setStyleEpoch] = useState(0);
 
   // Remembers where a dragged item came from so the move can be undone.
   // There's no undo anywhere else in the app, and an accidental drag would
@@ -390,10 +450,12 @@ export function MapEditor({
     // node_modules/maplibre-gl/dist/ - re-copy both after any maplibre-gl
     // version upgrade).
     maplibregl.setWorkerUrl("/maplibre-gl-worker.mjs");
+    ensureRtlTextSupport();
 
+    const initial = findStyle(mapStyleId);
     const map = new maplibregl.Map({
       container: mapContainer.current,
-      style: buildBaseStyle(mapStyleId),
+      style: initial.kind === "vector" ? initial.url : buildRasterStyle(initial),
       center: DEFAULT_CENTER,
       zoom: 12,
     });
@@ -417,30 +479,49 @@ export function MapEditor({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Swap the base layer when the user picks a different style.
+  // Swap the base map when the user picks a different style.
   //
-  // The source is rebuilt rather than updated through setTiles(), because
-  // setTiles only replaces the tile URLs - `maxzoom` keeps whatever the style
-  // at mount declared. Since the page mounts on Streets (no ceiling, so 22),
-  // switching to Terrain left the source asking opentopomap for z18-22 tiles
-  // it doesn't serve: every one comes back empty and the map turns to blur
-  // instead of overzooming the z17 tiles it has. Recreating the source is the
-  // only way to change maxzoom through the public API.
+  // Raster -> raster rebuilds just the `base` source rather than calling
+  // setTiles(), because setTiles only replaces tile URLs - `maxzoom` keeps
+  // whatever the style at mount declared. That left Terrain asking
+  // opentopomap for z18-22 tiles it doesn't serve, and the map went blank
+  // past z17 instead of overzooming what it had. There's no public setter for
+  // maxzoom, so the source is recreated and re-inserted underneath our own
+  // layers.
   //
-  // Only the base is touched - the item, draw-preview and overlay layers stay
-  // put - and it's re-inserted underneath everything so it can't cover them.
+  // Anything involving a vector style needs a full setStyle(), since a vector
+  // style is a whole document, not a tile URL. That discards every source and
+  // layer we added, so styleEpoch is bumped once the new style settles and
+  // the effects that build our layers put them back.
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
 
-    const style = MAP_STYLES.find((s) => s.id === mapStyleId) ?? MAP_STYLES[0];
+    const style = findStyle(mapStyleId);
 
     const apply = () => {
-      const current = map.getSource("base") as
+      const baseSource = map.getSource("base") as
         | maplibregl.RasterTileSource
         | undefined;
-      // Nothing to do on the first run: the mount style is already in place.
-      if (current && current.tiles?.[0] === style.tiles[0]) return;
+      // Our raster styles are the only ones that create a `base` source, so
+      // its absence means a vector style is currently loaded.
+      const onRaster = Boolean(baseSource);
+
+      if (style.kind === "vector") {
+        map.setStyle(style.url);
+        map.once("idle", () => setStyleEpoch((e) => e + 1));
+        return;
+      }
+
+      if (!onRaster) {
+        // Coming back from a vector style: same full replacement.
+        map.setStyle(buildRasterStyle(style));
+        map.once("idle", () => setStyleEpoch((e) => e + 1));
+        return;
+      }
+
+      // Already showing this exact raster style (the mount case).
+      if (baseSource?.tiles?.[0] === style.tiles[0]) return;
 
       if (map.getLayer("base")) map.removeLayer("base");
       if (map.getSource("base")) map.removeSource("base");
@@ -450,7 +531,7 @@ export function MapEditor({
         tiles: style.tiles,
         tileSize: 256,
         maxzoom: style.maxzoom,
-        attribution: COMBINED_ATTRIBUTION,
+        attribution: RASTER_ATTRIBUTION,
       });
 
       const firstOtherLayer = map.getStyle().layers.find((l) => l.id !== "base");
@@ -503,16 +584,17 @@ export function MapEditor({
 
     if (map.isStyleLoaded()) applyOverlay();
     else map.once("load", applyOverlay);
-  }, [project.base_map_image_url, project.base_map_bounds]);
+  }, [project.base_map_image_url, project.base_map_bounds, styleEpoch]);
 
-  // Set up shape sources/layers.
+  // Set up shape sources/layers. Re-runs after a style swap, which discards
+  // them along with everything else the old style owned.
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
 
     if (map.isStyleLoaded()) ensureShapeLayers(map);
     else map.once("load", () => ensureShapeLayers(map));
-  }, []);
+  }, [styleEpoch]);
 
   // Click-to-place / draw-vertex handling.
   useEffect(() => {
@@ -626,7 +708,7 @@ export function MapEditor({
 
     if (map.isStyleLoaded()) update();
     else map.once("load", update);
-  }, [drawPoints, pendingGeometry]);
+  }, [drawPoints, pendingGeometry, styleEpoch]);
 
   // Render point-item markers.
   useEffect(() => {
@@ -747,7 +829,7 @@ export function MapEditor({
     if (map.isStyleLoaded()) update();
     else map.once("load", update);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items, hiddenLayerIds, activeTags, dateFrom, dateTo, query, layers]);
+  }, [items, hiddenLayerIds, activeTags, dateFrom, dateTo, query, layers, styleEpoch]);
 
   // Marker for a pending new Point item.
   useEffect(() => {
