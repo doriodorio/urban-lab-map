@@ -45,6 +45,24 @@ const BASE_STYLE: maplibregl.StyleSpecification = {
   layers: [{ id: "base", type: "raster", source: "base" }],
 };
 
+// Apple's projection from the Designing Fluid Interfaces sample code: where a
+// flick would come to rest, given its release velocity. Deliberately the
+// exponential-decay form, not the v²/2a textbook one - this is what makes a
+// flick feel thrown rather than snapped.
+function projectMomentum(velocity: number, decelerationRate = 0.998) {
+  return ((velocity / 1000) * decelerationRate) / (1 - decelerationRate);
+}
+
+// Past a boundary the surface resists progressively instead of stopping dead:
+// a hard stop reads as frozen, resistance reads as "responsive, but there's
+// nothing more this way".
+function rubberband(overshoot: number, dimension: number, constant = 0.55) {
+  return (
+    (overshoot * dimension * constant) /
+    (dimension + constant * Math.abs(overshoot))
+  );
+}
+
 function centroid(geometry: Geometry): [number, number] {
   if (geometry.type === "Point") return geometry.coordinates;
   const ring =
@@ -124,6 +142,17 @@ export function PublicViewer({
     firstThread?.id ?? null
   );
   const [stepIndex, setStepIndex] = useState(0);
+  // Which way the last step change travelled, so the incoming content enters
+  // along the axis of the gesture that summoned it.
+  const [stepDir, setStepDir] = useState<1 | -1>(1);
+  // Live 1:1 offset while a swipe is in progress; null when not dragging, so
+  // the settle transition only applies after release.
+  const [dragX, setDragX] = useState<number | null>(null);
+  const dragRef = useRef<{
+    startX: number;
+    width: number;
+    history: { x: number; t: number }[];
+  } | null>(null);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [hiddenLayerIds, setHiddenLayerIds] = useState<Set<string>>(new Set());
   // Lifted out of ExplorePanel so the map narrows along with the result list -
@@ -316,6 +345,66 @@ export function PublicViewer({
     });
   }, [currentStep]);
 
+  function goToStep(next: number) {
+    if (next < 0 || next >= steps.length) return;
+    setStepDir(next > stepIndex ? 1 : -1);
+    setStepIndex(next);
+  }
+
+  // Swipe between stops. Tracked continuously rather than through a
+  // swipe-left-style recogniser, because a recogniser only reports a final
+  // state and throws away the feedback during the gesture.
+  function onStepPointerDown(e: React.PointerEvent) {
+    if (steps.length < 2) return;
+    // Let the user still select text and use controls inside the card.
+    const target = e.target as HTMLElement;
+    if (target.closest("button, a, input, select, textarea, audio, video")) {
+      return;
+    }
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    dragRef.current = {
+      startX: e.clientX,
+      width: (e.currentTarget as HTMLElement).offsetWidth || 320,
+      history: [{ x: e.clientX, t: performance.now() }],
+    };
+  }
+
+  function onStepPointerMove(e: React.PointerEvent) {
+    const drag = dragRef.current;
+    if (!drag) return;
+
+    const raw = e.clientX - drag.startX;
+    // Resist at the ends, where there is no next stop to reveal.
+    const atStart = stepIndex === 0 && raw > 0;
+    const atEnd = stepIndex === steps.length - 1 && raw < 0;
+    const offset =
+      atStart || atEnd ? rubberband(raw, drag.width) : raw;
+
+    drag.history.push({ x: e.clientX, t: performance.now() });
+    if (drag.history.length > 5) drag.history.shift();
+    setDragX(offset);
+  }
+
+  function onStepPointerUp() {
+    const drag = dragRef.current;
+    dragRef.current = null;
+    if (!drag) return;
+
+    const offset = dragX ?? 0;
+    const first = drag.history[0];
+    const last = drag.history[drag.history.length - 1];
+    const dt = Math.max(1, last.t - first.t);
+    const velocity = ((last.x - first.x) / dt) * 1000; // px/s
+
+    // Commit based on where the flick is going, not where the finger stopped.
+    const projected = offset + projectMomentum(velocity);
+    const threshold = drag.width * 0.25;
+
+    setDragX(null);
+    if (projected <= -threshold) goToStep(stepIndex + 1);
+    else if (projected >= threshold) goToStep(stepIndex - 1);
+  }
+
   function toggleLayer(id: string) {
     setHiddenLayerIds((prev) => {
       const next = new Set(prev);
@@ -330,29 +419,31 @@ export function PublicViewer({
       <div className="relative min-h-0 flex-1">
         <div ref={mapContainer} className="h-full w-full" />
 
-        <div className="absolute left-3 top-3 max-w-[70%] rounded bg-white/95 px-3 py-2 shadow">
-          <p className="text-sm font-medium">{project.name}</p>
+        <div className="material material-edge absolute backdrop-blur-xl backdrop-saturate-150 left-3 top-3 max-w-[70%] rounded-2xl px-3.5 py-2.5">
+          <p className="text-[15px] font-semibold leading-tight tracking-[-0.01em]">
+            {project.name}
+          </p>
           {project.description && (
-            <p className="text-xs text-neutral-500">{project.description}</p>
+            <p className="mt-0.5 text-[13px] leading-snug text-neutral-600">
+              {project.description}
+            </p>
           )}
         </div>
       </div>
 
-      <aside className="flex max-h-[45vh] w-full flex-col overflow-y-auto border-t border-neutral-200 bg-white md:max-h-none md:w-96 md:border-l md:border-t-0">
+      <aside className="material-panel flex max-h-[48vh] backdrop-blur-2xl backdrop-saturate-150 w-full flex-col overflow-y-auto md:max-h-none md:w-96">
         {threads.length > 0 && (
-          <div className="flex border-b border-neutral-200 text-sm">
-            <button
+          <div className="material sticky top-0 z-10 flex text-sm backdrop-blur-xl backdrop-saturate-150">
+            <ModeTab
+              label="Guided tour"
+              active={mode === "tour"}
               onClick={() => setMode("tour")}
-              className={`flex-1 py-2 ${mode === "tour" ? "font-semibold" : "text-neutral-400"}`}
-            >
-              Guided tour
-            </button>
-            <button
+            />
+            <ModeTab
+              label="Explore"
+              active={mode === "explore"}
               onClick={() => setMode("explore")}
-              className={`flex-1 py-2 ${mode === "explore" ? "font-semibold" : "text-neutral-400"}`}
-            >
-              Explore
-            </button>
+            />
           </div>
         )}
 
@@ -366,7 +457,7 @@ export function PublicViewer({
             }}
             steps={steps}
             stepIndex={stepIndex}
-            onStepChange={setStepIndex}
+            onStepChange={goToStep}
           />
         )}
 
@@ -389,16 +480,72 @@ export function PublicViewer({
         )}
 
         {selectedItem && (
-          <ItemCard
-            item={selectedItem}
-            narration={currentStep?.narration ?? null}
-            layerName={
-              layers.find((l) => l.id === selectedItem.layer_id)?.name ?? null
-            }
-          />
+          <div
+            // The card tracks the finger 1:1 during a swipe, then settles.
+            // Transition is off mid-gesture so the content stays glued to the
+            // pointer rather than lagging behind it.
+            onPointerDown={mode === "tour" ? onStepPointerDown : undefined}
+            onPointerMove={mode === "tour" ? onStepPointerMove : undefined}
+            onPointerUp={mode === "tour" ? onStepPointerUp : undefined}
+            onPointerCancel={mode === "tour" ? onStepPointerUp : undefined}
+            style={{
+              transform: `translate3d(${dragX ?? 0}px, 0, 0)`,
+              transition:
+                dragX === null
+                  ? "transform 380ms cubic-bezier(0.22, 1, 0.36, 1)"
+                  : "none",
+              touchAction: mode === "tour" ? "pan-y" : undefined,
+            }}
+          >
+            <ItemCard
+              // Keyed by stop so each one animates in as its own thing.
+              key={mode === "tour" ? `${threadId}-${stepIndex}` : selectedItem.id}
+              className={
+                mode === "tour"
+                  ? stepDir === 1
+                    ? "step-forward"
+                    : "step-back"
+                  : undefined
+              }
+              item={selectedItem}
+              narration={currentStep?.narration ?? null}
+              layerName={
+                layers.find((l) => l.id === selectedItem.layer_id)?.name ?? null
+              }
+            />
+          </div>
         )}
       </aside>
     </div>
+  );
+}
+
+function ModeTab({
+  label,
+  active,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`press relative flex-1 py-2.5 text-[13px] tracking-[0.01em] ${
+        active ? "font-semibold text-neutral-900" : "text-neutral-500"
+      }`}
+    >
+      {label}
+      {/* The indicator sits under the active tab rather than a full-width
+          divider, so the chrome stays a floating layer. */}
+      <span
+        aria-hidden
+        className={`absolute inset-x-4 bottom-0 h-0.5 rounded-full bg-neutral-900 transition-opacity duration-200 ${
+          active ? "opacity-100" : "opacity-0"
+        }`}
+      />
+    </button>
   );
 }
 
@@ -420,12 +567,12 @@ function TourPanel({
   const thread = threads.find((t) => t.id === threadId);
 
   return (
-    <div className="flex flex-col gap-3 border-b border-neutral-200 p-4">
+    <div className="flex flex-col gap-3 px-4 pb-4 pt-3.5">
       {threads.length > 1 && (
         <select
           value={threadId ?? ""}
           onChange={(e) => onThreadChange(e.target.value)}
-          className="rounded border border-neutral-300 px-2 py-1.5 text-sm"
+          className="rounded-lg border border-neutral-300/80 bg-white/70 px-2.5 py-2 text-[13px]"
         >
           {threads.map((t) => (
             <option key={t.id} value={t.id}>
@@ -436,37 +583,61 @@ function TourPanel({
       )}
 
       {thread && threads.length <= 1 && (
-        <p className="text-sm font-medium">{thread.name}</p>
+        <p className="text-[15px] font-semibold leading-tight tracking-[-0.01em]">
+          {thread.name}
+        </p>
       )}
       {thread?.description && (
-        <p className="text-xs text-neutral-500">{thread.description}</p>
+        <p className="text-[13px] leading-snug text-neutral-600">
+          {thread.description}
+        </p>
       )}
 
       {steps.length === 0 ? (
-        <p className="text-sm text-neutral-400">
-          This tour has no stops yet.
-        </p>
+        <p className="text-[13px] text-neutral-500">This tour has no stops yet.</p>
       ) : (
         <>
-          <p className="text-xs text-neutral-400">
-            Stop {stepIndex + 1} of {steps.length}
-          </p>
-          <div className="flex gap-2">
-            <button
-              onClick={() => onStepChange(stepIndex - 1)}
-              disabled={stepIndex === 0}
-              className="rounded border border-neutral-300 px-3 py-1.5 text-sm disabled:opacity-40"
-            >
-              ← Previous
-            </button>
-            <button
-              onClick={() => onStepChange(stepIndex + 1)}
-              disabled={stepIndex >= steps.length - 1}
-              className="rounded bg-black px-3 py-1.5 text-sm font-medium text-white disabled:opacity-40"
-            >
-              Next →
-            </button>
+          {/* Progress as position, not just a count - it shows how much is
+              left without needing to be read. */}
+          <div className="flex items-center gap-1" aria-hidden>
+            {steps.map((s, i) => (
+              <span
+                key={s.item_id}
+                className={`h-1 flex-1 rounded-full transition-colors duration-300 ${
+                  i <= stepIndex ? "bg-neutral-900" : "bg-neutral-900/15"
+                }`}
+              />
+            ))}
           </div>
+
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[12px] tabular-nums text-neutral-500">
+              {stepIndex + 1} of {steps.length}
+            </span>
+            <div className="flex gap-2">
+              <button
+                onClick={() => onStepChange(stepIndex - 1)}
+                disabled={stepIndex === 0}
+                aria-label="Previous stop"
+                className="press rounded-full border border-neutral-300/80 bg-white/60 px-3.5 py-1.5 text-[13px] disabled:opacity-35"
+              >
+                ←
+              </button>
+              <button
+                onClick={() => onStepChange(stepIndex + 1)}
+                disabled={stepIndex >= steps.length - 1}
+                className="press rounded-full bg-neutral-900 px-4 py-1.5 text-[13px] font-medium text-white disabled:opacity-35"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+
+          {steps.length > 1 && (
+            <p className="text-[12px] text-neutral-400 md:hidden">
+              Swipe the card to move between stops
+            </p>
+          )}
         </>
       )}
     </div>
@@ -491,29 +662,33 @@ function ExplorePanel({
   onSelect: (item: Item) => void;
 }) {
   return (
-    <div className="flex flex-col gap-4 border-b border-neutral-200 p-4">
+    <div className="flex flex-col gap-4 px-4 pb-4 pt-3.5">
       <input
         type="search"
         value={query}
         onChange={(e) => onQueryChange(e.target.value)}
         placeholder="Search this map…"
-        className="rounded border border-neutral-300 px-2 py-1.5 text-sm"
+        className="rounded-lg border border-neutral-300/80 bg-white/70 px-3 py-2 text-[13px] outline-none focus:border-neutral-400"
       />
 
       {layers.length > 0 && (
-        <div className="flex flex-col gap-1">
-          <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
+        <div className="flex flex-col gap-1.5">
+          <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-neutral-500">
             Layers
           </p>
           {layers.map((layer) => (
-            <label key={layer.id} className="flex items-center gap-2 text-sm">
+            <label
+              key={layer.id}
+              className="flex cursor-pointer items-center gap-2.5 text-[13px]"
+            >
               <input
                 type="checkbox"
                 checked={!hiddenLayerIds.has(layer.id)}
                 onChange={() => onToggleLayer(layer.id)}
+                className="accent-neutral-900"
               />
               <span
-                className="h-3 w-3 rounded-full"
+                className="h-2.5 w-2.5 shrink-0 rounded-full ring-1 ring-black/10"
                 style={{ background: layer.color ?? UNASSIGNED_COLOR }}
               />
               {layer.name}
@@ -523,13 +698,15 @@ function ExplorePanel({
       )}
 
       <div className="flex flex-col gap-1">
-        <p className="text-xs text-neutral-400">{results.length} items</p>
-        <ul className="flex max-h-64 flex-col overflow-y-auto">
+        <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-neutral-500">
+          {results.length} items
+        </p>
+        <ul className="-mx-2 flex max-h-64 flex-col overflow-y-auto">
           {results.slice(0, 100).map((item) => (
             <li key={item.id}>
               <button
                 onClick={() => onSelect(item)}
-                className="w-full truncate py-1 text-left text-sm text-blue-600 underline"
+                className="press w-full truncate rounded-lg px-2 py-1.5 text-left text-[13px] text-neutral-800 hover:bg-neutral-900/[0.05]"
               >
                 {item.title || "Untitled"}
               </button>
@@ -545,43 +722,61 @@ function ItemCard({
   item,
   narration,
   layerName,
+  className,
 }: {
   item: Item;
   narration: string | null;
   layerName: string | null;
+  className?: string;
 }) {
   return (
-    <div className="flex flex-col gap-2 p-4">
+    <div
+      className={`scroll-edge flex flex-col gap-2.5 border-t border-neutral-900/[0.06] px-4 pb-6 pt-4 ${className ?? ""}`}
+    >
+      {/* The guide's voice, set apart from the item's own content. */}
       {narration && (
-        <p className="rounded bg-neutral-100 p-2 text-sm text-neutral-700">
+        <p className="border-l-2 border-neutral-900/20 pl-3 text-[14px] leading-relaxed text-neutral-700">
           {narration}
         </p>
       )}
 
       {layerName && (
-        <p className="text-xs uppercase tracking-wide text-neutral-400">
+        <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-neutral-500">
           {layerName}
         </p>
       )}
 
-      <h2 className="text-base font-medium">{item.title || "Untitled"}</h2>
+      {/* Larger text wants tighter tracking and leading; body stays near 0. */}
+      <h2 className="text-[19px] font-semibold leading-[1.15] tracking-[-0.02em]">
+        {item.title || "Untitled"}
+      </h2>
 
       {item.attribution && (
-        <p className="text-sm italic text-neutral-500">— {item.attribution}</p>
+        <p className="text-[13px] italic leading-snug text-neutral-500">
+          — {item.attribution}
+        </p>
       )}
 
       {item.media?.map((m, i) => {
         if (m.type === "image") {
           return (
             // eslint-disable-next-line @next/next/no-img-element
-            <img key={i} src={m.url} alt={item.title ?? ""} className="rounded" />
+            <img
+              key={i}
+              src={m.url}
+              alt={item.title ?? ""}
+              draggable={false}
+              className="w-full rounded-xl shadow-sm"
+            />
           );
         }
         if (m.type === "audio") {
           return <audio key={i} controls src={m.url} className="w-full" />;
         }
         if (m.type === "video") {
-          return <video key={i} controls src={m.url} className="w-full rounded" />;
+          return (
+            <video key={i} controls src={m.url} className="w-full rounded-xl" />
+          );
         }
         return (
           <a
@@ -589,7 +784,7 @@ function ItemCard({
             href={m.url}
             target="_blank"
             rel="noreferrer"
-            className="break-all text-sm text-blue-600 underline"
+            className="break-all text-[13px] text-blue-600 underline"
           >
             {m.url}
           </a>
@@ -597,17 +792,27 @@ function ItemCard({
       })}
 
       {item.body && (
-        <p className="whitespace-pre-wrap text-sm text-neutral-700">
+        <p className="whitespace-pre-wrap text-[14px] leading-relaxed text-neutral-700">
           {item.body}
         </p>
       )}
 
-      {item.date_start && (
-        <p className="text-xs text-neutral-400">{item.date_start}</p>
-      )}
-
-      {item.tags && item.tags.length > 0 && (
-        <p className="text-xs text-neutral-400">{item.tags.join(" · ")}</p>
+      {(item.date_start || (item.tags && item.tags.length > 0)) && (
+        <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+          {item.date_start && (
+            <span className="text-[12px] tabular-nums text-neutral-500">
+              {item.date_start}
+            </span>
+          )}
+          {item.tags?.map((tag) => (
+            <span
+              key={tag}
+              className="rounded-full bg-neutral-900/[0.06] px-2 py-0.5 text-[11px] text-neutral-600"
+            >
+              {tag}
+            </span>
+          ))}
+        </div>
       )}
     </div>
   );
