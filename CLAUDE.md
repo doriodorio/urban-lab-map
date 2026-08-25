@@ -159,6 +159,6 @@ Do not build these, even if they seem easy to add along the way — they were de
 
 ## 7. Open items Claude Code should flag back to Dori, not decide alone
 
-- Whether last year's group material is already in digital form ready to import, or needs to be gathered/digitized first (affects week 7)
-- Whether a single custom base-map image per project is sufficient, or a group will need more than one (affects the `base_map_image_url` design — currently one per project)
+- ~~Whether last year's group material is already in digital form ready to import~~ — **answered Aug 25, 2026:** it isn't; Dori is collecting it. Week 7 can't start until that material exists.
+- ~~Whether a single custom base-map image per project is sufficient~~ — **answered Aug 25, 2026:** one per project is enough for v1. Matches what's built; no change made.
 - Supabase/Vercel account creation and billing — these are account-level decisions, not code

@@ -177,8 +177,8 @@ The architecture is decided and specified in full in `CLAUDE.md` (stack, schema,
 ## 11. Open Questions
 
 - **Build path — resolved.** Decided: a custom build, executed with Claude Code rather than a no-code/low-code stand-in. See `CLAUDE.md` — a companion, execution-ready spec (stack, schema, screens, week-by-week build order through October 18) written for Claude Code to build from directly.
-- **Base map support.** Still unresolved: is a single custom base-map image (e.g., a historical map) enough for v1, or does the tool need full support for multiple custom base layers per project? The build brief currently assumes one base image per project — flag this to Claude Code early if that's wrong.
-- **Data readiness.** Is last year's groups' material (interviews, images, field notes, literature reviews) already in a digital, importable form, or does it need to be gathered/digitized before it can be used as v1 test data? This matters for week 7 of the build brief's timeline.
+- **Base map support — resolved (Aug 25, 2026).** One custom base-map image per project is enough for v1. This is what's built (`projects.base_map_image_url` / `base_map_bounds`), so no change was needed. Supporting several per project would mean moving the image onto its own table; revisit only if a group actually hits the limit.
+- **Data readiness — resolved (Aug 25, 2026).** Last year's material is *not* already in importable form; Dori is collecting it. Week 7 ("import real material, fix what breaks under real content") therefore depends on that collection landing, and is the one week in the schedule with an external dependency.
 
 ---
 
