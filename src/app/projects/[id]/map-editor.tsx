@@ -417,17 +417,47 @@ export function MapEditor({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Swap the base layer's tile URLs when the user picks a different style.
-  // Uses setTiles() rather than map.setStyle() so our own sources/layers
-  // (items, draw preview, base-map overlay) never get torn down.
+  // Swap the base layer when the user picks a different style.
+  //
+  // The source is rebuilt rather than updated through setTiles(), because
+  // setTiles only replaces the tile URLs - `maxzoom` keeps whatever the style
+  // at mount declared. Since the page mounts on Streets (no ceiling, so 22),
+  // switching to Terrain left the source asking opentopomap for z18-22 tiles
+  // it doesn't serve: every one comes back empty and the map turns to blur
+  // instead of overzooming the z17 tiles it has. Recreating the source is the
+  // only way to change maxzoom through the public API.
+  //
+  // Only the base is touched - the item, draw-preview and overlay layers stay
+  // put - and it's re-inserted underneath everything so it can't cover them.
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
 
     const style = MAP_STYLES.find((s) => s.id === mapStyleId) ?? MAP_STYLES[0];
+
     const apply = () => {
-      const source = map.getSource("base") as maplibregl.RasterTileSource | undefined;
-      source?.setTiles(style.tiles);
+      const current = map.getSource("base") as
+        | maplibregl.RasterTileSource
+        | undefined;
+      // Nothing to do on the first run: the mount style is already in place.
+      if (current && current.tiles?.[0] === style.tiles[0]) return;
+
+      if (map.getLayer("base")) map.removeLayer("base");
+      if (map.getSource("base")) map.removeSource("base");
+
+      map.addSource("base", {
+        type: "raster",
+        tiles: style.tiles,
+        tileSize: 256,
+        maxzoom: style.maxzoom,
+        attribution: COMBINED_ATTRIBUTION,
+      });
+
+      const firstOtherLayer = map.getStyle().layers.find((l) => l.id !== "base");
+      map.addLayer(
+        { id: "base", type: "raster", source: "base" },
+        firstOtherLayer?.id
+      );
     };
 
     if (map.isStyleLoaded()) apply();
