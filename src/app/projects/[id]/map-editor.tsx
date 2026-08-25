@@ -801,27 +801,40 @@ export function MapEditor({
       <div className="relative flex-1">
         <div ref={mapContainer} className="h-full w-full" />
 
-        <div className="absolute left-3 top-3 flex items-center gap-2 rounded bg-white/95 px-3 py-2 shadow">
-          <Link href="/projects" className="text-sm text-neutral-500 underline">
+        <div className="material material-edge absolute left-3 top-3 flex items-center gap-3 rounded-2xl px-3.5 py-2 backdrop-blur-xl backdrop-saturate-150">
+          <Link
+            href="/projects"
+            className="press rounded-lg px-1 text-[13px] text-neutral-500 hover:text-neutral-900"
+          >
             ← Workspace
           </Link>
-          <span className="text-sm font-medium">{project.name}</span>
+
+          <span className="text-[15px] font-semibold leading-tight tracking-[-0.01em]">
+            {project.name}
+          </span>
+
+          {/* A hairline groups the project's own destinations away from the
+              way back out, so the bar reads as two things rather than five. */}
+          <span aria-hidden className="h-4 w-px bg-neutral-900/15" />
+
           <Link
             href={`/projects/${project.id}/threads`}
-            className="text-sm text-neutral-500 underline"
+            className="press rounded-lg px-1 text-[13px] text-neutral-500 hover:text-neutral-900"
           >
             Threads
           </Link>
           <Link
             href={`/projects/${project.id}/settings`}
-            className="text-sm text-neutral-500 underline"
+            className="press rounded-lg px-1 text-[13px] text-neutral-500 hover:text-neutral-900"
           >
             Settings
           </Link>
+
           <select
             value={mapStyleId}
             onChange={(e) => setMapStyleId(e.target.value)}
-            className="rounded border border-neutral-300 px-1.5 py-1 text-sm"
+            aria-label="Base map style"
+            className="rounded-lg border border-neutral-300/70 bg-white/60 px-2 py-1 text-[13px] outline-none focus:border-neutral-400"
           >
             {MAP_STYLES.map((s) => (
               <option key={s.id} value={s.id}>
@@ -831,55 +844,63 @@ export function MapEditor({
           </select>
         </div>
 
-        <div className="absolute bottom-3 left-3 flex flex-col gap-2">
+        <div className="absolute bottom-3 left-3 flex flex-col items-start gap-2">
+          {/* Finish/Cancel appear above the tools, anchored to them, so the
+              choice shows up next to the thing that raised it. */}
           {(drawMode === "line" || drawMode === "polygon") &&
             drawPoints.length > 0 && (
-              <div className="flex gap-2">
+              <div className="material material-edge step-forward flex items-center gap-2 rounded-2xl p-1.5 backdrop-blur-xl backdrop-saturate-150">
                 <button
                   onClick={finishDrawing}
                   disabled={!minPointsMet}
-                  className="rounded bg-black px-3 py-2 text-sm font-medium text-white shadow disabled:opacity-50"
+                  className="press rounded-xl bg-neutral-900 px-3.5 py-1.5 text-[13px] font-medium text-white disabled:opacity-35"
                 >
-                  Finish ({drawPoints.length} points)
+                  Finish
+                  <span className="ml-1.5 tabular-nums opacity-60">
+                    {drawPoints.length}
+                  </span>
                 </button>
                 <button
                   onClick={() => toggleDrawMode(drawMode)}
-                  className="rounded bg-white px-3 py-2 text-sm font-medium text-black shadow"
+                  className="press rounded-xl px-3 py-1.5 text-[13px] text-neutral-600 hover:text-neutral-900"
                 >
                   Cancel
                 </button>
               </div>
             )}
-          <div className="flex gap-2">
-            <button
+
+          {/* One segmented control rather than three separate pills: they're
+              mutually exclusive states of the same choice. */}
+          <div className="material material-edge flex items-center gap-1 rounded-2xl p-1.5 backdrop-blur-xl backdrop-saturate-150">
+            <DrawTool
+              label="Point"
+              active={drawMode === "point"}
               onClick={() => toggleDrawMode("point")}
-              className={`rounded px-3 py-2 text-sm font-medium shadow ${
-                drawMode === "point" ? "bg-black text-white" : "bg-white text-black"
-              }`}
-            >
-              {drawMode === "point" ? "Click the map…" : "+ Point"}
-            </button>
-            <button
+            />
+            <DrawTool
+              label="Line"
+              active={drawMode === "line"}
               onClick={() => toggleDrawMode("line")}
-              className={`rounded px-3 py-2 text-sm font-medium shadow ${
-                drawMode === "line" ? "bg-black text-white" : "bg-white text-black"
-              }`}
-            >
-              + Line
-            </button>
-            <button
+            />
+            <DrawTool
+              label="Region"
+              active={drawMode === "polygon"}
               onClick={() => toggleDrawMode("polygon")}
-              className={`rounded px-3 py-2 text-sm font-medium shadow ${
-                drawMode === "polygon" ? "bg-black text-white" : "bg-white text-black"
-              }`}
-            >
-              + Polygon
-            </button>
+            />
+            {drawMode && (
+              <span className="px-2 text-[12px] text-neutral-500">
+                {drawMode === "point"
+                  ? "Click the map"
+                  : "Click to add points"}
+              </span>
+            )}
           </div>
         </div>
       </div>
 
-      <aside className="flex w-80 flex-col overflow-y-auto border-l border-neutral-200 bg-white">
+      {/* Widened from 320px: five tabs plus an item detail panel were fighting
+          for the same strip, and "Base map" wrapped. */}
+      <aside className="material-panel flex w-96 flex-col overflow-y-auto border-l border-neutral-900/[0.08] backdrop-blur-2xl backdrop-saturate-150">
         {/* Search sits above the tabs rather than inside Filters: it's reached
             constantly, and shouldn't cost a tab switch to get to. */}
         <SearchBox
@@ -890,38 +911,33 @@ export function MapEditor({
           onSelectResult={focusItem}
         />
 
-        <div className="flex border-b border-neutral-200 text-sm">
-          <button
+        <div className="material sticky top-0 z-10 flex backdrop-blur-xl backdrop-saturate-150">
+          <PanelTab
+            label="Layers"
+            active={panel === "layers"}
             onClick={() => setPanel("layers")}
-            className={`flex-1 py-2 ${panel === "layers" ? "font-semibold" : "text-neutral-400"}`}
-          >
-            Layers
-          </button>
-          <button
+          />
+          <PanelTab
+            label="Filters"
+            active={panel === "filters"}
             onClick={() => setPanel("filters")}
-            className={`flex-1 py-2 ${panel === "filters" ? "font-semibold" : "text-neutral-400"}`}
-          >
-            Filters
-          </button>
-          <button
+          />
+          <PanelTab
+            label="Import"
+            active={panel === "import"}
             onClick={() => setPanel("import")}
-            className={`flex-1 py-2 ${panel === "import" ? "font-semibold" : "text-neutral-400"}`}
-          >
-            Import
-          </button>
-          <button
+          />
+          <PanelTab
+            label="Base map"
+            active={panel === "basemap"}
             onClick={() => setPanel("basemap")}
-            className={`flex-1 py-2 ${panel === "basemap" ? "font-semibold" : "text-neutral-400"}`}
-          >
-            Base map
-          </button>
-          <button
+          />
+          <PanelTab
+            label="Trash"
+            count={deletedItems.length}
+            active={panel === "trash"}
             onClick={() => setPanel("trash")}
-            className={`flex-1 py-2 ${panel === "trash" ? "font-semibold" : "text-neutral-400"}`}
-          >
-            Trash
-            {deletedItems.length > 0 && ` (${deletedItems.length})`}
-          </button>
+          />
         </div>
 
         {panel === "layers" && (
@@ -1030,19 +1046,26 @@ function LayerPanel({
 
   return (
     <div className="flex flex-col gap-3 p-4">
-      <ul className="flex flex-col gap-2">
+      <ul className="-mx-2 flex flex-col">
         {layers.map((layer) => (
-          <li key={layer.id} className="flex items-center gap-2 text-sm">
+          <li
+            key={layer.id}
+            // Delete only surfaces on hover/focus-within: it sits next to a
+            // control people toggle constantly, and shouldn't be equally
+            // reachable by accident.
+            className="group flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-[13px] hover:bg-neutral-900/[0.04]"
+          >
             <input
               type="checkbox"
               checked={!hiddenLayerIds.has(layer.id)}
               onChange={() => onToggle(layer.id)}
+              className="accent-neutral-900"
             />
             <span
-              className="h-3 w-3 rounded-full"
+              className="h-2.5 w-2.5 shrink-0 rounded-full ring-1 ring-black/10"
               style={{ background: layer.color ?? UNASSIGNED_COLOR }}
             />
-            <span className="flex-1">{layer.name}</span>
+            <span className="flex-1 truncate">{layer.name}</span>
             <form
               action={async () => {
                 await deleteLayerAction(layer.id);
@@ -1059,7 +1082,7 @@ function LayerPanel({
             >
               <button
                 type="submit"
-                className="text-xs text-neutral-400 underline hover:text-red-600"
+                className="press rounded-md px-1.5 py-0.5 text-[12px] text-neutral-400 opacity-0 transition-opacity hover:text-red-600 focus:opacity-100 group-hover:opacity-100"
               >
                 Delete
               </button>
@@ -1067,12 +1090,15 @@ function LayerPanel({
           </li>
         ))}
         {layers.length === 0 && (
-          <li className="text-sm text-neutral-400">No layers yet.</li>
+          <li className="px-2 text-[13px] text-neutral-400">No layers yet.</li>
         )}
       </ul>
 
-      <form action={formAction} className="flex flex-col gap-2 border-t border-neutral-200 pt-3">
-        <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
+      <form
+        action={formAction}
+        className="flex flex-col gap-2 border-t border-neutral-900/[0.08] pt-3"
+      >
+        <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-neutral-500">
           New layer
         </p>
         <div className="flex gap-2">
@@ -1080,26 +1106,89 @@ function LayerPanel({
             type="color"
             name="color"
             defaultValue="#3b82f6"
-            className="h-9 w-9 rounded border border-neutral-300"
+            aria-label="Layer colour"
+            className="h-9 w-9 cursor-pointer rounded-lg border border-neutral-300/70 bg-white/60 p-1"
           />
           <input
             type="text"
             name="name"
             required
             placeholder="e.g. Interviews"
-            className="flex-1 rounded border border-neutral-300 px-2 py-1.5 text-sm"
+            className="flex-1 rounded-lg border border-neutral-300/70 bg-white/60 px-2.5 py-1.5 text-[13px] outline-none focus:border-neutral-400"
           />
         </div>
         <button
           type="submit"
           disabled={pending}
-          className="rounded bg-black px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+          className="press self-start rounded-full bg-neutral-900 px-4 py-1.5 text-[13px] font-medium text-white disabled:opacity-40"
         >
           {pending ? "Adding…" : "Add layer"}
         </button>
-        {state?.error && <p className="text-sm text-red-600">{state.error}</p>}
+        {state?.error && (
+          <p className="text-[13px] text-red-600">{state.error}</p>
+        )}
       </form>
     </div>
+  );
+}
+
+function DrawTool({
+  label,
+  active,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      aria-pressed={active}
+      className={`press rounded-xl px-3.5 py-1.5 text-[13px] font-medium ${
+        active
+          ? "bg-neutral-900 text-white"
+          : "text-neutral-700 hover:bg-neutral-900/[0.06]"
+      }`}
+    >
+      {label}
+    </button>
+  );
+}
+
+function PanelTab({
+  label,
+  active,
+  count,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  count?: number;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`press relative flex-1 whitespace-nowrap px-1 py-2.5 text-[12px] ${
+        active ? "font-semibold text-neutral-900" : "text-neutral-500"
+      }`}
+    >
+      {label}
+      {count ? (
+        <span className="ml-1 rounded-full bg-neutral-900/10 px-1.5 py-0.5 text-[10px] tabular-nums">
+          {count}
+        </span>
+      ) : null}
+      {/* Indicator under the active tab instead of a full-width rule, so the
+          bar stays a floating layer rather than a hard divider. */}
+      <span
+        aria-hidden
+        className={`absolute inset-x-2 bottom-0 h-0.5 rounded-full bg-neutral-900 transition-opacity duration-200 ${
+          active ? "opacity-100" : "opacity-0"
+        }`}
+      />
+    </button>
   );
 }
 
@@ -1124,7 +1213,7 @@ function SearchBox({
           value={query}
           onChange={(e) => onQueryChange(e.target.value)}
           placeholder="Search title, text, source, tag…"
-          className="w-full rounded border border-neutral-300 px-2 py-1.5 text-sm"
+          className="w-full rounded-lg border border-neutral-300/70 bg-white/60 px-2.5 py-1.5 text-[13px] outline-none focus:border-neutral-400"
         />
       </div>
 
@@ -1297,7 +1386,7 @@ function ImportPanel({
         value={layerId}
         onChange={(e) => setLayerId(e.target.value)}
         disabled={running}
-        className="rounded border border-neutral-300 px-2 py-1.5 text-sm"
+        className="rounded-lg border border-neutral-300/70 bg-white/60 px-2.5 py-1.5 text-[13px] outline-none focus:border-neutral-400"
       >
         <option value="">No layer</option>
         {layers.map((l) => (
@@ -1324,7 +1413,7 @@ function ImportPanel({
       <button
         onClick={runImport}
         disabled={running || files.length === 0}
-        className="rounded bg-black px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+        className="press self-start rounded-full bg-neutral-900 px-4 py-1.5 text-[13px] font-medium text-white disabled:opacity-40"
       >
         {running
           ? `Importing… ${done + failed} of ${files.length}`
@@ -1481,7 +1570,7 @@ function FiltersPanel({
   return (
     <div className="flex flex-col gap-5 p-4">
       <div className="flex flex-col gap-2">
-        <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
+        <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-neutral-500">
           Tags
         </p>
         {allTags.length === 0 && (
@@ -1502,7 +1591,7 @@ function FiltersPanel({
       </div>
 
       <div className="flex flex-col gap-2 border-t border-neutral-200 pt-4">
-        <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
+        <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-neutral-500">
           Timeline
         </p>
         <label className="flex flex-col gap-1 text-xs text-neutral-500">
@@ -1511,7 +1600,7 @@ function FiltersPanel({
             type="date"
             value={dateFrom ?? ""}
             onChange={(e) => onDateFromChange(e.target.value || null)}
-            className="rounded border border-neutral-300 px-2 py-1 text-sm"
+            className="rounded-lg border border-neutral-300/70 bg-white/60 px-2.5 py-1.5 text-[13px] outline-none focus:border-neutral-400"
           />
         </label>
         <label className="flex flex-col gap-1 text-xs text-neutral-500">
@@ -1520,7 +1609,7 @@ function FiltersPanel({
             type="date"
             value={dateTo ?? ""}
             onChange={(e) => onDateToChange(e.target.value || null)}
-            className="rounded border border-neutral-300 px-2 py-1 text-sm"
+            className="rounded-lg border border-neutral-300/70 bg-white/60 px-2.5 py-1.5 text-[13px] outline-none focus:border-neutral-400"
           />
         </label>
         {(dateFrom || dateTo) && (
@@ -1635,7 +1724,7 @@ function NewItemForm({
       action={formAction}
       className="flex flex-col gap-2 border-t border-neutral-200 p-4"
     >
-      <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
+      <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-neutral-500">
         New item — {geometryLabel(geometry)}
       </p>
       <input type="hidden" name="geometry" value={JSON.stringify(geometry)} />
@@ -1644,7 +1733,7 @@ function NewItemForm({
       <select
         value={type}
         onChange={(e) => setType(e.target.value)}
-        className="rounded border border-neutral-300 px-2 py-1.5 text-sm"
+        className="rounded-lg border border-neutral-300/70 bg-white/60 px-2.5 py-1.5 text-[13px] outline-none focus:border-neutral-400"
       >
         {TYPE_OPTIONS.map((t) => (
           <option key={t.value} value={t.value}>
@@ -1658,39 +1747,39 @@ function NewItemForm({
         name="title"
         required
         placeholder="Title"
-        className="rounded border border-neutral-300 px-2 py-1.5 text-sm"
+        className="rounded-lg border border-neutral-300/70 bg-white/60 px-2.5 py-1.5 text-[13px] outline-none focus:border-neutral-400"
       />
       <textarea
         name="body"
         rows={3}
         placeholder={bodyLabelFor(type)}
-        className="rounded border border-neutral-300 px-2 py-1.5 text-sm"
+        className="rounded-lg border border-neutral-300/70 bg-white/60 px-2.5 py-1.5 text-[13px] outline-none focus:border-neutral-400"
       />
       {showAttribution && (
         <input
           type="text"
           name="attribution"
           placeholder="Attribution (interviewee, source, citation…)"
-          className="rounded border border-neutral-300 px-2 py-1.5 text-sm"
+          className="rounded-lg border border-neutral-300/70 bg-white/60 px-2.5 py-1.5 text-[13px] outline-none focus:border-neutral-400"
         />
       )}
       <input
         type="text"
         name="tags"
         placeholder="Tags, comma separated"
-        className="rounded border border-neutral-300 px-2 py-1.5 text-sm"
+        className="rounded-lg border border-neutral-300/70 bg-white/60 px-2.5 py-1.5 text-[13px] outline-none focus:border-neutral-400"
       />
       <label className="flex flex-col gap-1 text-xs text-neutral-500">
         Date
         <input
           type="date"
           name="date_start"
-          className="rounded border border-neutral-300 px-2 py-1 text-sm"
+          className="rounded-lg border border-neutral-300/70 bg-white/60 px-2.5 py-1.5 text-[13px] outline-none focus:border-neutral-400"
         />
       </label>
       <select
         name="layer_id"
-        className="rounded border border-neutral-300 px-2 py-1.5 text-sm"
+        className="rounded-lg border border-neutral-300/70 bg-white/60 px-2.5 py-1.5 text-[13px] outline-none focus:border-neutral-400"
         defaultValue=""
       >
         <option value="">No layer</option>
@@ -1728,7 +1817,7 @@ function NewItemForm({
             type="text"
             name="media_url"
             placeholder="or paste a link (YouTube, Vimeo, SoundCloud…)"
-            className="rounded border border-neutral-300 px-2 py-1.5 text-sm"
+            className="rounded-lg border border-neutral-300/70 bg-white/60 px-2.5 py-1.5 text-[13px] outline-none focus:border-neutral-400"
           />
         </>
       )}
@@ -1766,7 +1855,7 @@ function NewItemForm({
         <button
           type="submit"
           disabled={pending}
-          className="rounded bg-black px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+          className="press self-start rounded-full bg-neutral-900 px-4 py-1.5 text-[13px] font-medium text-white disabled:opacity-40"
         >
           {pending ? "Saving…" : "Add item"}
         </button>
@@ -1881,13 +1970,14 @@ function ItemDetail({
   }
 
   return (
-    <div className="flex flex-col gap-2 border-t border-neutral-200 p-4">
-      <div className="flex items-start justify-between gap-2">
+    <div className="step-forward flex flex-col gap-2.5 border-t border-neutral-900/[0.08] p-4">
+      <div className="flex items-center justify-between gap-2">
         <select
           value={layerId}
           onChange={handleLayerChange}
           disabled={savingLayer}
-          className="flex-1 rounded border border-neutral-300 px-2 py-1 text-xs uppercase tracking-wide text-neutral-500"
+          aria-label="Layer"
+          className="flex-1 rounded-lg border border-neutral-300/70 bg-white/60 px-2 py-1 text-[11px] font-medium uppercase tracking-[0.06em] text-neutral-600 outline-none focus:border-neutral-400"
         >
           <option value="">No layer</option>
           {layers.map((l) => (
@@ -1896,26 +1986,40 @@ function ItemDetail({
             </option>
           ))}
         </select>
-        <button onClick={onClose} className="text-sm text-neutral-400">
+        <button
+          onClick={onClose}
+          aria-label="Close"
+          className="press rounded-full px-2 py-1 text-[13px] text-neutral-400 hover:bg-neutral-900/[0.06] hover:text-neutral-700"
+        >
           ✕
         </button>
       </div>
 
-      <span className="w-fit rounded bg-neutral-100 px-1.5 py-0.5 text-xs text-neutral-500">
+      <span className="w-fit rounded-full bg-neutral-900/[0.06] px-2 py-0.5 text-[11px] text-neutral-600">
         {TYPE_OPTIONS.find((t) => t.value === item.type)?.label ?? item.type}
       </span>
 
-      <h3 className="text-base font-medium">{item.title}</h3>
+      <h3 className="text-[18px] font-semibold leading-[1.15] tracking-[-0.02em]">
+        {item.title}
+      </h3>
 
       {item.attribution && (
-        <p className="text-sm italic text-neutral-500">— {item.attribution}</p>
+        <p className="text-[13px] italic leading-snug text-neutral-500">
+          — {item.attribution}
+        </p>
       )}
 
       {item.media?.map((m, i) => {
         if (m.type === "image") {
           return (
             // eslint-disable-next-line @next/next/no-img-element
-            <img key={i} src={m.url} alt={item.title ?? ""} className="rounded" />
+            <img
+              key={i}
+              src={m.url}
+              alt={item.title ?? ""}
+              draggable={false}
+              className="w-full rounded-xl shadow-sm"
+            />
           );
         }
         if (m.type === "audio") {
@@ -1923,7 +2027,7 @@ function ItemDetail({
         }
         if (m.type === "video") {
           return (
-            <video key={i} controls src={m.url} className="w-full rounded" />
+            <video key={i} controls src={m.url} className="w-full rounded-xl" />
           );
         }
         return (
@@ -1987,12 +2091,12 @@ function ItemDetail({
           onChange={(e) => setTagsInput(e.target.value)}
           onBlur={handleTagsBlur}
           placeholder="comma, separated, tags"
-          className="rounded border border-neutral-300 px-2 py-1 text-sm"
+          className="rounded-lg border border-neutral-300/70 bg-white/60 px-2.5 py-1.5 text-[13px] outline-none focus:border-neutral-400"
         />
       </label>
 
       <div className="flex flex-col gap-2 border-t border-neutral-200 pt-3">
-        <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
+        <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-neutral-500">
           Linked items
         </p>
 
@@ -2056,12 +2160,12 @@ function ItemDetail({
                   value={linkNote}
                   onChange={(e) => setLinkNote(e.target.value)}
                   placeholder="How are they related? (optional)"
-                  className="rounded border border-neutral-300 px-2 py-1.5 text-sm"
+                  className="rounded-lg border border-neutral-300/70 bg-white/60 px-2.5 py-1.5 text-[13px] outline-none focus:border-neutral-400"
                 />
                 <button
                   onClick={handleCreateLink}
                   disabled={linking}
-                  className="rounded bg-black px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+                  className="press self-start rounded-full bg-neutral-900 px-4 py-1.5 text-[13px] font-medium text-white disabled:opacity-40"
                 >
                   {linking ? "Linking…" : "Add link"}
                 </button>
@@ -2073,7 +2177,7 @@ function ItemDetail({
                   value={linkQuery}
                   onChange={(e) => setLinkQuery(e.target.value)}
                   placeholder="Link to… search by title, text, tag"
-                  className="rounded border border-neutral-300 px-2 py-1.5 text-sm"
+                  className="rounded-lg border border-neutral-300/70 bg-white/60 px-2.5 py-1.5 text-[13px] outline-none focus:border-neutral-400"
                 />
                 <ul className="flex max-h-48 flex-col overflow-y-auto">
                   {matchingCandidates.slice(0, 30).map((i) => (
@@ -2175,7 +2279,7 @@ function BaseMapPanel({
               type="number"
               step="any"
               required
-              className="rounded border border-neutral-300 px-2 py-1 text-sm"
+              className="rounded-lg border border-neutral-300/70 bg-white/60 px-2.5 py-1.5 text-[13px] outline-none focus:border-neutral-400"
             />
           </label>
           <label className="flex flex-col gap-1 text-xs text-neutral-500">
@@ -2185,7 +2289,7 @@ function BaseMapPanel({
               type="number"
               step="any"
               required
-              className="rounded border border-neutral-300 px-2 py-1 text-sm"
+              className="rounded-lg border border-neutral-300/70 bg-white/60 px-2.5 py-1.5 text-[13px] outline-none focus:border-neutral-400"
             />
           </label>
           <label className="flex flex-col gap-1 text-xs text-neutral-500">
@@ -2195,7 +2299,7 @@ function BaseMapPanel({
               type="number"
               step="any"
               required
-              className="rounded border border-neutral-300 px-2 py-1 text-sm"
+              className="rounded-lg border border-neutral-300/70 bg-white/60 px-2.5 py-1.5 text-[13px] outline-none focus:border-neutral-400"
             />
           </label>
           <label className="flex flex-col gap-1 text-xs text-neutral-500">
@@ -2205,14 +2309,14 @@ function BaseMapPanel({
               type="number"
               step="any"
               required
-              className="rounded border border-neutral-300 px-2 py-1 text-sm"
+              className="rounded-lg border border-neutral-300/70 bg-white/60 px-2.5 py-1.5 text-[13px] outline-none focus:border-neutral-400"
             />
           </label>
         </div>
         <button
           type="submit"
           disabled={pending}
-          className="rounded bg-black px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+          className="press self-start rounded-full bg-neutral-900 px-4 py-1.5 text-[13px] font-medium text-white disabled:opacity-40"
         >
           {pending ? "Uploading…" : "Set base map"}
         </button>
