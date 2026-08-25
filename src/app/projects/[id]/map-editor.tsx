@@ -250,6 +250,7 @@ export function MapEditor({
   purgeItemAction,
   updateItemLayerAction,
   updateItemTagsAction,
+  updateItemGeometryAction,
   createItemLinkAction,
   deleteItemLinkAction,
   setBaseMapAction,
@@ -276,6 +277,11 @@ export function MapEditor({
     itemId: string,
     tags: string[]
   ) => Promise<ActionResult>;
+  updateItemGeometryAction: (
+    itemId: string,
+    lng: number,
+    lat: number
+  ) => Promise<ActionResult>;
   createItemLinkAction: (
     itemId: string,
     otherItemId: string,
@@ -288,6 +294,16 @@ export function MapEditor({
   const mapContainer = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const markersRef = useRef<Map<string, maplibregl.Marker>>(new Map());
+  // Set while a drag is in flight so the render effect doesn't yank the
+  // marker back to its stored position mid-gesture.
+  const draggingRef = useRef(false);
+  // The dragend handler is attached once per marker and would otherwise close
+  // over the items from that render, so "where did this come from" could be
+  // read off a stale snapshot and Undo would restore the wrong position.
+  const itemsRef = useRef(items);
+  useEffect(() => {
+    itemsRef.current = items;
+  }, [items]);
 
   // Tracks which layers are *hidden* rather than which are shown, so a layer
   // created after mount is visible by default - seeding a "visible" set from
@@ -315,6 +331,48 @@ export function MapEditor({
     "layers" | "filters" | "basemap" | "trash" | null
   >("layers");
   const [mapStyleId, setMapStyleId] = useState(MAP_STYLES[0].id);
+
+  // Remembers where a dragged item came from so the move can be undone.
+  // There's no undo anywhere else in the app, and an accidental drag would
+  // otherwise be unrecoverable - nobody records the original coordinates.
+  const [lastMove, setLastMove] = useState<{
+    itemId: string;
+    from: [number, number];
+  } | null>(null);
+  const [moveError, setMoveError] = useState<string | null>(null);
+
+  async function handleMarkerDrop(itemId: string, lng: number, lat: number) {
+    const before = itemsRef.current.find((i) => i.id === itemId);
+    const from =
+      before?.geometry.type === "Point"
+        ? (before.geometry.coordinates as [number, number])
+        : null;
+
+    draggingRef.current = false;
+    setMoveError(null);
+
+    const result = await updateItemGeometryAction(itemId, lng, lat);
+    if (result.error) {
+      setMoveError(result.error);
+      // Put it back: the save failed, so the stored position is unchanged.
+      const marker = markersRef.current.get(itemId);
+      if (marker && from) marker.setLngLat(from);
+      return;
+    }
+    if (from) setLastMove({ itemId, from });
+  }
+
+  async function undoMove() {
+    if (!lastMove) return;
+    const { itemId, from } = lastMove;
+    setLastMove(null);
+    const result = await updateItemGeometryAction(itemId, from[0], from[1]);
+    if (result.error) {
+      setMoveError(result.error);
+      return;
+    }
+    markersRef.current.get(itemId)?.setLngLat(from);
+  }
 
   const layerColor = (layerId: string | null) =>
     layers.find((l) => l.id === layerId)?.color || UNASSIGNED_COLOR;
@@ -579,18 +637,45 @@ export function MapEditor({
           setSelectedItemId(itemId);
         });
 
-        marker = new maplibregl.Marker({ element: el })
+        marker = new maplibregl.Marker({ element: el, draggable: true })
           .setLngLat(item.geometry.coordinates)
           .addTo(map);
+
+        marker.on("dragstart", () => {
+          draggingRef.current = true;
+        });
+        marker.on("dragend", () => {
+          const { lng, lat } = marker!.getLngLat();
+          void handleMarkerDrop(itemId, lng, lat);
+        });
+
         markersRef.current.set(item.id, marker);
       }
 
       const el = marker.getElement();
       el.style.background = layerColor(item.layer_id);
       el.style.display = visible ? "block" : "none";
+
+      // Only the selected item can be dragged. Leaving every marker draggable
+      // makes it far too easy to nudge someone else's item while panning, and
+      // a moved item has no trace of where it used to be.
+      const selected = item.id === selectedItemId;
+      marker.setDraggable(selected);
+      el.style.cursor = selected ? "move" : "pointer";
+      el.style.outline = selected ? "2px solid #111" : "";
+      el.style.outlineOffset = selected ? "2px" : "";
+
+      // Keep the marker in step with the stored position: after a drag the
+      // server round-trip returns fresh coordinates, and on a failed save
+      // this snaps it back to where it actually still is.
+      if (!marker.isDraggable() || !draggingRef.current) {
+        const [lng, lat] = item.geometry.coordinates;
+        const at = marker.getLngLat();
+        if (at.lng !== lng || at.lat !== lat) marker.setLngLat([lng, lat]);
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items, hiddenLayerIds, activeTags, dateFrom, dateTo, query, layers]);
+  }, [items, hiddenLayerIds, activeTags, dateFrom, dateTo, query, layers, selectedItemId]);
 
   // Render line/polygon items.
   useEffect(() => {
@@ -894,6 +979,9 @@ export function MapEditor({
             allItems={items}
             linked={linkedItemsFor(selectedItem.id, links, items)}
             memberNames={memberNames}
+            canUndoMove={lastMove?.itemId === selectedItem.id}
+            onUndoMove={undoMove}
+            moveError={moveError}
             deleteItemAction={deleteItemAction}
             updateItemLayerAction={updateItemLayerAction}
             updateItemTagsAction={updateItemTagsAction}
@@ -1448,6 +1536,9 @@ function ItemDetail({
   allItems,
   linked,
   memberNames,
+  canUndoMove,
+  onUndoMove,
+  moveError,
   deleteItemAction,
   updateItemLayerAction,
   updateItemTagsAction,
@@ -1461,6 +1552,9 @@ function ItemDetail({
   allItems: Item[];
   linked: { link: ItemLink; other: Item }[];
   memberNames: Record<string, string>;
+  canUndoMove: boolean;
+  onUndoMove: () => void;
+  moveError: string | null;
   deleteItemAction: (itemId: string) => Promise<ActionResult>;
   updateItemLayerAction: (
     itemId: string,
@@ -1607,6 +1701,30 @@ function ItemDetail({
           ? `Added by ${memberNames[item.created_by] ?? "a former member"}`
           : "Added before authorship was recorded"}
       </p>
+
+      {item.geometry.type === "Point" ? (
+        <div className="flex flex-col gap-0.5">
+          <p className="text-xs text-neutral-400">
+            {item.geometry.coordinates[1].toFixed(5)},{" "}
+            {item.geometry.coordinates[0].toFixed(5)} — drag its marker to move
+            it
+          </p>
+          {canUndoMove && (
+            <button
+              onClick={onUndoMove}
+              className="self-start text-xs text-blue-600 underline"
+            >
+              Undo move
+            </button>
+          )}
+          {moveError && <p className="text-xs text-red-600">{moveError}</p>}
+        </div>
+      ) : (
+        <p className="text-xs text-neutral-400">
+          {item.geometry.type === "LineString" ? "Line" : "Region"} — drawn
+          shapes can&apos;t be moved yet
+        </p>
+      )}
 
       <label className="flex flex-col gap-1 text-xs text-neutral-500">
         Tags

@@ -156,6 +156,52 @@ export async function createItem(
   return { success: true };
 }
 
+export async function updateItemGeometry(
+  projectId: string,
+  itemId: string,
+  lng: number,
+  lat: number
+): Promise<ActionResult> {
+  if (!Number.isFinite(lng) || !Number.isFinite(lat)) {
+    return { error: "Invalid coordinates." };
+  }
+  if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+    return { error: "Coordinates out of range." };
+  }
+
+  const supabase = await createClient();
+
+  // Only point items are draggable; refuse anything else rather than
+  // silently flattening a line or polygon into a single point.
+  const { data: item, error: readError } = await supabase
+    .from("items")
+    .select("geometry")
+    .eq("id", itemId)
+    .maybeSingle();
+
+  if (readError) {
+    return { error: readError.message };
+  }
+  if (!item) {
+    return { error: "Item not found." };
+  }
+  if ((item.geometry as { type?: string })?.type !== "Point") {
+    return { error: "Only point items can be moved." };
+  }
+
+  const { error } = await supabase
+    .from("items")
+    .update({ geometry: { type: "Point", coordinates: [lng, lat] } })
+    .eq("id", itemId);
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  revalidatePath(`/projects/${projectId}`);
+  return { success: true };
+}
+
 export async function updateItemTags(
   projectId: string,
   itemId: string,
