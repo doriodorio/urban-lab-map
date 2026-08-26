@@ -72,6 +72,8 @@ const VALID_TYPES = [
   "interview",
   "document",
   "data",
+  "link",
+  "video",
   "composite",
 ];
 

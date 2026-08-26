@@ -6,6 +6,7 @@ import Link from "next/link";
 import * as maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { preparePhoto } from "./photo-import";
+import { toVideoEmbed, linkHost, videoThumbnail } from "@/lib/embed";
 
 type Layer = { id: string; name: string; color: string | null };
 type Geometry =
@@ -219,8 +220,13 @@ const TYPE_OPTIONS: { value: string; label: string; bodyLabel: string }[] = [
   { value: "document", label: "Document / Citation", bodyLabel: "Description" },
   { value: "data", label: "Data", bodyLabel: "A stat, number, or short data note" },
   { value: "image", label: "Image", bodyLabel: "Caption" },
+  { value: "link", label: "Web link", bodyLabel: "What's at this link, and why it matters" },
+  { value: "video", label: "Video", bodyLabel: "Notes on the video" },
   { value: "composite", label: "Composite (mixed)", bodyLabel: "Notes" },
 ];
+
+/** Types whose whole point is a URL, so the field is shown prominently. */
+const URL_FIRST_TYPES = new Set(["link", "video"]);
 
 function bodyLabelFor(type: string) {
   return TYPE_OPTIONS.find((t) => t.value === type)?.bodyLabel ?? "Notes";
@@ -289,6 +295,69 @@ function centroid(geometry: Geometry): [number, number] {
 }
 
 type DrawMode = "point" | "line" | "polygon" | null;
+
+type LabelPlacement = {
+  id: string;
+  title: string;
+  image: string | null;
+  color: string;
+  side: "left" | "right";
+  /** Where the item actually sits on screen - the end of the leader line. */
+  pointX: number;
+  pointY: number;
+  /** Where the label sits in the margin, after stacking to avoid overlaps. */
+  labelY: number;
+  /** Inner edge of the label in pixels - where its leader line starts. */
+  labelX: number;
+};
+
+// Each card carries a thumbnail and a title, so the rows are tall and the
+// margin has to be wide enough for both.
+const LABEL_ROW_HEIGHT = 58;
+const LABEL_MARGIN = 208;
+// Past this many per side the cards run out of vertical room and the leader
+// lines cross so heavily they stop indicating anything.
+const MAX_LABELS_PER_SIDE = 9;
+
+/**
+ * The picture that represents an item in the gallery view: its own photo if
+ * it has one, otherwise a video still, so link-and-video items aren't all
+ * reduced to blank tiles.
+ */
+function firstImage(item: Item) {
+  const photo = item.media?.find((m) => m.type === "image")?.url;
+  if (photo) return photo;
+
+  for (const media of item.media ?? []) {
+    const still = videoThumbnail(media.url);
+    if (still) return still;
+  }
+  return null;
+}
+
+/**
+ * Stacks labels down a margin without overlapping.
+ *
+ * Each one wants to sit level with its own point; where two would collide the
+ * lower one is pushed down, which is what makes the leader lines fan out
+ * instead of converging into an unreadable bundle.
+ */
+function stackLabels(
+  entries: Omit<LabelPlacement, "labelY" | "labelX">[],
+  height: number,
+  labelX: number
+): LabelPlacement[] {
+  const sorted = [...entries].sort((a, b) => a.pointY - b.pointY);
+  let previousBottom = -Infinity;
+  return sorted.map((entry) => {
+    const y = Math.min(
+      Math.max(entry.pointY, previousBottom + LABEL_ROW_HEIGHT),
+      height - LABEL_ROW_HEIGHT / 2
+    );
+    previousBottom = y;
+    return { ...entry, labelY: y, labelX };
+  });
+}
 
 export function MapEditor({
   project,
@@ -387,6 +456,11 @@ export function MapEditor({
     "layers" | "filters" | "import" | "basemap" | "trash" | null
   >("layers");
   const [mapStyleId, setMapStyleId] = useState(DEFAULT_STYLE_ID);
+  // Gallery view: items show as thumbnails and their titles run down the
+  // margins with leader lines, so the map reads as an annotated plate rather
+  // than a set of pins you have to click one at a time.
+  const [previewMode, setPreviewMode] = useState(false);
+  const [labels, setLabels] = useState<LabelPlacement[]>([]);
   // Bumped whenever setStyle() replaces the whole style, which discards every
   // source and layer we added. Effects that build our own layers depend on it
   // so they re-run and put everything back.
@@ -436,6 +510,12 @@ export function MapEditor({
 
   const layerColor = (layerId: string | null) =>
     layers.find((l) => l.id === layerId)?.color || UNASSIGNED_COLOR;
+
+  // Everything currently passing the layer, tag, date and search filters.
+  // Declared here because the map effects below read it, not just the panels.
+  const visibleItems = items.filter((i) =>
+    isVisible(i, hiddenLayerIds, activeTags, dateFrom, dateTo, query)
+  );
 
   // Initialize map once.
   useEffect(() => {
@@ -787,7 +867,87 @@ export function MapEditor({
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items, hiddenLayerIds, activeTags, dateFrom, dateTo, query, layers, selectedItemId]);
+  }, [items, hiddenLayerIds, activeTags, dateFrom, dateTo, query, layers, selectedItemId, previewMode]);
+
+  // Lay the margin labels out for whatever is currently on screen.
+  //
+  // Recomputed on every map move, so it's throttled to one pass per frame -
+  // `move` fires far faster than React can usefully re-render, and each pass
+  // projects every visible item.
+  useEffect(() => {
+    const map = mapRef.current;
+    // Nothing to lay out when the view is off; the overlay isn't rendered
+    // then either, so stale entries in state are never shown.
+    if (!map || !previewMode) return;
+
+    let frame = 0;
+    const compute = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const canvas = map.getCanvas();
+        const width = canvas.clientWidth;
+        const height = canvas.clientHeight;
+
+        const onScreen = visibleItems
+          .map((item) => ({ item, point: map.project(centroid(item.geometry)) }))
+          // Only label what the reader can actually see; a leader line to a
+          // point off the edge of the map points at nothing.
+          .filter(
+            ({ point }) =>
+              point.x >= 0 &&
+              point.x <= width &&
+              point.y >= 0 &&
+              point.y <= height
+          );
+
+        const sides = { left: [], right: [] } as Record<
+          "left" | "right",
+          Omit<LabelPlacement, "labelY" | "labelX">[]
+        >;
+
+        for (const { item, point } of onScreen) {
+          const side = point.x < width / 2 ? "left" : "right";
+          sides[side].push({
+            id: item.id,
+            title: item.title || "Untitled",
+            image: firstImage(item),
+            color: layerColor(item.layer_id),
+            side,
+            pointX: point.x,
+            pointY: point.y,
+          });
+        }
+
+        // When there are too many, keep the ones nearest the vertical middle:
+        // they're the ones a reader is most likely looking at.
+        const trim = (list: Omit<LabelPlacement, "labelY" | "labelX">[]) =>
+          list.length <= MAX_LABELS_PER_SIDE
+            ? list
+            : [...list]
+                .sort(
+                  (a, b) =>
+                    Math.abs(a.pointY - height / 2) -
+                    Math.abs(b.pointY - height / 2)
+                )
+                .slice(0, MAX_LABELS_PER_SIDE);
+
+        setLabels([
+          ...stackLabels(trim(sides.left), height, LABEL_MARGIN),
+          ...stackLabels(trim(sides.right), height, width - LABEL_MARGIN),
+        ]);
+      });
+    };
+
+    compute();
+    map.on("move", compute);
+    map.on("resize", compute);
+    return () => {
+      map.off("move", compute);
+      map.off("resize", compute);
+      cancelAnimationFrame(frame);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [previewMode, visibleItems, layers, styleEpoch]);
 
   // Render line/polygon items.
   useEffect(() => {
@@ -861,10 +1021,6 @@ export function MapEditor({
     });
   }
 
-  const visibleItems = items.filter((i) =>
-    isVisible(i, hiddenLayerIds, activeTags, dateFrom, dateTo, query)
-  );
-
   // Select an item and bring it into view - used by search results and by
   // following a link, where the target is often off-screen.
   function focusItem(item: Item) {
@@ -913,6 +1069,10 @@ export function MapEditor({
       <div className="relative flex-1">
         <div ref={mapContainer} className="h-full w-full" />
 
+        {previewMode && (
+          <MarginLabels labels={labels} onSelect={setSelectedItemId} />
+        )}
+
         <div className="material material-edge absolute left-3 top-3 flex items-center gap-3 rounded-2xl px-3.5 py-2 backdrop-blur-xl backdrop-saturate-150">
           <Link
             href="/projects"
@@ -941,6 +1101,19 @@ export function MapEditor({
           >
             Settings
           </Link>
+
+          <button
+            onClick={() => setPreviewMode((p) => !p)}
+            aria-pressed={previewMode}
+            title="Show items as thumbnails with their titles in the margins"
+            className={`press rounded-lg px-2 py-1 text-[13px] font-medium ${
+              previewMode
+                ? "bg-neutral-900 text-white"
+                : "text-neutral-600 hover:bg-neutral-900/[0.06]"
+            }`}
+          >
+            Gallery
+          </button>
 
           <select
             value={mapStyleId}
@@ -1241,6 +1414,123 @@ function LayerPanel({
         )}
       </form>
     </div>
+  );
+}
+
+/**
+ * Titles stacked down the margins, each tied to its item by a leader line.
+ *
+ * The whole overlay ignores pointer events so panning and zooming still work
+ * through it; only the labels themselves take clicks.
+ */
+function MarginLabels({
+  labels,
+  onSelect,
+}: {
+  labels: LabelPlacement[];
+  onSelect: (id: string) => void;
+}) {
+  return (
+    <div className="pointer-events-none absolute inset-0 overflow-hidden">
+      <svg className="absolute inset-0 h-full w-full">
+        {labels.map((l) => {
+          // A short horizontal shoulder before the diagonal, so the line
+          // reads as leaving the text rather than striking through it.
+          const shoulder = l.side === "left" ? l.labelX + 10 : l.labelX - 10;
+          return (
+            <g key={l.id}>
+              <path
+                d={`M ${l.labelX} ${l.labelY} L ${shoulder} ${l.labelY} L ${l.pointX} ${l.pointY}`}
+                fill="none"
+                stroke={l.color}
+                strokeWidth={1}
+                strokeOpacity={0.5}
+              />
+              <circle cx={l.pointX} cy={l.pointY} r={2.5} fill={l.color} />
+            </g>
+          );
+        })}
+      </svg>
+
+      {labels.map((l) => (
+        <button
+          key={l.id}
+          onClick={() => onSelect(l.id)}
+          style={{
+            top: l.labelY,
+            [l.side]: 8,
+            width: LABEL_MARGIN - 20,
+          }}
+          className={`material material-edge press pointer-events-auto absolute flex -translate-y-1/2 items-center gap-2 rounded-xl p-1.5 text-left backdrop-blur-md ${
+            // Mirrored so the thumbnail always sits on the outer edge and the
+            // text faces the map, next to where its line leaves.
+            l.side === "right" ? "flex-row-reverse text-right" : ""
+          }`}
+        >
+          {l.image ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={l.image}
+              alt=""
+              draggable={false}
+              className="h-11 w-11 shrink-0 rounded-lg object-cover"
+              style={{ outline: `2px solid ${l.color}`, outlineOffset: -2 }}
+            />
+          ) : (
+            <span
+              className="h-11 w-11 shrink-0 rounded-lg"
+              style={{ background: `${l.color}22`, outline: `2px solid ${l.color}`, outlineOffset: -2 }}
+            />
+          )}
+          <span className="line-clamp-2 flex-1 text-[11px] font-medium leading-tight text-neutral-800">
+            {l.title}
+          </span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * A pasted URL: played in place when it's a video we recognise, otherwise
+ * shown as a link with its host, so a reader can see where it goes before
+ * clicking. Unrecognised URLs are never framed - see toVideoEmbed.
+ */
+function EmbeddedLink({ url }: { url: string }) {
+  const embed = toVideoEmbed(url);
+
+  if (embed) {
+    return (
+      <div className="overflow-hidden rounded-xl bg-black/5">
+        <iframe
+          src={embed}
+          title="Embedded video"
+          allow="accelerometer; clipboard-write; encrypted-media; picture-in-picture"
+          referrerPolicy="strict-origin-when-cross-origin"
+          allowFullScreen
+          className="aspect-video w-full border-0"
+        />
+      </div>
+    );
+  }
+
+  const host = linkHost(url);
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noreferrer noopener"
+      className="press flex flex-col gap-0.5 rounded-lg border border-neutral-300/70 bg-white/60 px-2.5 py-2 hover:border-neutral-400"
+    >
+      {host && (
+        <span className="text-[11px] font-medium uppercase tracking-[0.06em] text-neutral-500">
+          {host}
+        </span>
+      )}
+      <span className="break-all text-[13px] text-blue-600 underline">
+        {url}
+      </span>
+    </a>
   );
 }
 
@@ -1828,7 +2118,9 @@ function NewItemForm({
       photoCoords[1] !== geometry.coordinates[1]);
 
   const showImage = type === "image" || type === "composite";
-  const showMedia = type === "interview" || type === "document" || type === "composite";
+  const urlFirst = URL_FIRST_TYPES.has(type);
+  const showMedia =
+    type === "interview" || type === "document" || type === "composite";
   const showAttribution = type !== "text" && type !== "data";
 
   return (
@@ -1914,6 +2206,29 @@ function NewItemForm({
           />
         </label>
       )}
+      {urlFirst && (
+        <label className="flex flex-col gap-1 text-xs text-neutral-500">
+          {type === "video" ? "Video link" : "Web address"}
+          <input
+            type="url"
+            name="media_url"
+            required
+            placeholder={
+              type === "video"
+                ? "https://youtube.com/watch?v=…"
+                : "https://…"
+            }
+            className="rounded-lg border border-neutral-300/70 bg-white/60 px-2.5 py-1.5 text-[13px] outline-none focus:border-neutral-400"
+          />
+          {type === "video" && (
+            <span className="text-[11px] text-neutral-400">
+              YouTube and Vimeo links play in place. Anything else is kept as a
+              link.
+            </span>
+          )}
+        </label>
+      )}
+
       {showMedia && (
         <>
           <label className="flex flex-col gap-1 text-xs text-neutral-500">
@@ -2142,17 +2457,7 @@ function ItemDetail({
             <video key={i} controls src={m.url} className="w-full rounded-xl" />
           );
         }
-        return (
-          <a
-            key={i}
-            href={m.url}
-            target="_blank"
-            rel="noreferrer"
-            className="break-all text-sm text-blue-600 underline"
-          >
-            {m.url}
-          </a>
-        );
+        return <EmbeddedLink key={i} url={m.url} />;
       })}
 
       {item.body && (

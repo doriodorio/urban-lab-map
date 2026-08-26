@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import * as maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
+import { toVideoEmbed, linkHost } from "@/lib/embed";
 
 type Layer = { id: string; name: string; color: string | null };
 type Geometry =
@@ -520,6 +521,49 @@ export function PublicViewer({
   );
 }
 
+/**
+ * Recognised videos play in place; anything else stays a link showing its
+ * host. Only known video hosts are ever framed, so a published map can't be
+ * used to embed an arbitrary page.
+ */
+function PublicEmbeddedLink({ url }: { url: string }) {
+  const embed = toVideoEmbed(url);
+
+  if (embed) {
+    return (
+      <div className="overflow-hidden rounded-xl bg-black/5">
+        <iframe
+          src={embed}
+          title="Embedded video"
+          allow="accelerometer; clipboard-write; encrypted-media; picture-in-picture"
+          referrerPolicy="strict-origin-when-cross-origin"
+          allowFullScreen
+          className="aspect-video w-full border-0"
+        />
+      </div>
+    );
+  }
+
+  const host = linkHost(url);
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noreferrer noopener"
+      className="press flex flex-col gap-0.5 rounded-lg border border-neutral-300/70 bg-white/60 px-2.5 py-2"
+    >
+      {host && (
+        <span className="text-[11px] font-medium uppercase tracking-[0.06em] text-neutral-500">
+          {host}
+        </span>
+      )}
+      <span className="break-all text-[13px] text-blue-600 underline">
+        {url}
+      </span>
+    </a>
+  );
+}
+
 function ModeTab({
   label,
   active,
@@ -778,17 +822,7 @@ function ItemCard({
             <video key={i} controls src={m.url} className="w-full rounded-xl" />
           );
         }
-        return (
-          <a
-            key={i}
-            href={m.url}
-            target="_blank"
-            rel="noreferrer"
-            className="break-all text-[13px] text-blue-600 underline"
-          >
-            {m.url}
-          </a>
-        );
+        return <PublicEmbeddedLink key={i} url={m.url} />;
       })}
 
       {item.body && (

@@ -32,7 +32,9 @@ create table if not exists items (
   id uuid primary key default gen_random_uuid(),
   project_id uuid references projects(id) on delete cascade,
   layer_id uuid references layers(id) on delete set null,
-  type text not null,             -- 'image' | 'text' | 'quote' | 'interview' | 'document' | 'data' | 'composite'
+  type text not null,             -- 'image' | 'text' | 'quote' | 'interview' | 'document' | 'data' | 'link' | 'video' | 'composite'
+                                  -- No CHECK constraint: the app validates against VALID_TYPES in
+                                  -- map-actions.ts, so adding a type needs no migration.
   geometry jsonb not null,        -- GeoJSON Point, LineString, or Polygon
   title text,
   body text,                      -- markdown/rich text for notes, quotes, transcripts
