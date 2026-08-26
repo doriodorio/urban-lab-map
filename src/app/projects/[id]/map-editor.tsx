@@ -445,6 +445,7 @@ export function MapEditor({
   currentUserId,
   createLayerAction,
   deleteLayerAction,
+  updateLayerAction,
   createItemAction,
   deleteItemAction,
   restoreItemAction,
@@ -466,6 +467,11 @@ export function MapEditor({
   currentUserId: string;
   createLayerAction: BoundAction;
   deleteLayerAction: (layerId: string) => Promise<ActionResult>;
+  updateLayerAction: (
+    layerId: string,
+    name: string,
+    color: string
+  ) => Promise<ActionResult>;
   createItemAction: BoundAction;
   deleteItemAction: (itemId: string) => Promise<ActionResult>;
   restoreItemAction: (itemId: string) => Promise<ActionResult>;
@@ -1318,6 +1324,8 @@ export function MapEditor({
             onToggle={toggleLayer}
             createLayerAction={createLayerAction}
             deleteLayerAction={deleteLayerAction}
+            updateLayerAction={updateLayerAction}
+            items={items}
           />
         )}
 
@@ -1400,29 +1408,147 @@ export function MapEditor({
   );
 }
 
+/**
+ * Renaming or recolouring a layer is a bulk edit - it reaches every item in
+ * that layer at once, which nothing else in this panel does. So the change is
+ * held until it is confirmed, and the confirmation says how many items it
+ * touches and what will actually happen to them.
+ */
+function LayerEditRow({
+  layer,
+  itemCount,
+  onCancel,
+  onSave,
+}: {
+  layer: Layer;
+  itemCount: number;
+  onCancel: () => void;
+  onSave: (name: string, color: string) => Promise<string | null>;
+}) {
+  const [name, setName] = useState(layer.name);
+  const [color, setColor] = useState(layer.color ?? UNASSIGNED_COLOR);
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const renamed = name.trim() !== layer.name;
+  const recoloured = color !== (layer.color ?? UNASSIGNED_COLOR);
+  const changed = renamed || recoloured;
+
+  const confirmMessage = () => {
+    const what: string[] = [];
+    if (renamed) what.push(`rename it to "${name.trim()}"`);
+    if (recoloured) what.push("change its colour");
+    const items =
+      itemCount === 1 ? "1 item" : `${itemCount} items`;
+    const effect = recoloured
+      ? `\n\nEvery one of them changes colour on the map straight away, including in the published view if this project is published.`
+      : `\n\nThe new name shows everywhere the layer appears, including in the published view if this project is published.`;
+    return `This will ${what.join(" and ")}.\n\n"${layer.name}" holds ${items}.${effect}\n\nGo ahead?`;
+  };
+
+  return (
+    <li className="flex flex-col gap-2 rounded-lg bg-neutral-900/[0.04] px-2 py-2">
+      <div className="flex items-center gap-2">
+        <input
+          type="color"
+          value={color}
+          onChange={(e) => setColor(e.target.value)}
+          aria-label={`Colour for ${layer.name}`}
+          className="h-8 w-8 shrink-0 cursor-pointer rounded-lg border border-neutral-300/70 bg-white/60 p-1"
+        />
+        <input
+          type="text"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          aria-label={`Name for ${layer.name}`}
+          autoFocus
+          className="min-w-0 flex-1 rounded-lg border border-neutral-300/70 bg-white/80 px-2.5 py-1.5 text-[13px] outline-none focus:border-neutral-400"
+        />
+      </div>
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          disabled={!changed || saving || !name.trim()}
+          onClick={async () => {
+            if (!confirm(confirmMessage())) return;
+            setSaving(true);
+            setError(await onSave(name, color));
+            setSaving(false);
+          }}
+          className="press rounded-full bg-neutral-900 px-3.5 py-1 text-[12px] font-medium text-white disabled:opacity-40"
+        >
+          {saving ? "Saving…" : "Save"}
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="press rounded-full px-3 py-1 text-[12px] text-neutral-500 hover:text-neutral-900"
+        >
+          Cancel
+        </button>
+        <span className="ml-auto text-[11px] text-neutral-400">
+          {itemCount === 1 ? "1 item" : `${itemCount} items`}
+        </span>
+      </div>
+      {error && <p className="text-[12px] text-red-600">{error}</p>}
+    </li>
+  );
+}
+
 function LayerPanel({
   layers,
+  items,
   hiddenLayerIds,
   onToggle,
   createLayerAction,
   deleteLayerAction,
+  updateLayerAction,
 }: {
   layers: Layer[];
+  items: Item[];
   hiddenLayerIds: Set<string>;
   onToggle: (id: string) => void;
   createLayerAction: BoundAction;
   deleteLayerAction: (layerId: string) => Promise<ActionResult>;
+  updateLayerAction: (
+    layerId: string,
+    name: string,
+    color: string
+  ) => Promise<ActionResult>;
 }) {
   const [state, formAction, pending] = useActionState(createLayerAction, {});
+  const [editingId, setEditingId] = useState<string | null>(null);
+
+  // How many items each change would reach - shown in the confirmation, since
+  // a layer edit is a bulk edit and nothing else in the panel is.
+  const itemCounts = new Map<string, number>();
+  for (const item of items) {
+    if (!item.layer_id) continue;
+    itemCounts.set(item.layer_id, (itemCounts.get(item.layer_id) ?? 0) + 1);
+  }
 
   return (
     <div className="flex flex-col gap-3 p-4">
       <ul className="-mx-2 flex flex-col">
-        {layers.map((layer) => (
+        {layers.map((layer) =>
+          editingId === layer.id ? (
+            <LayerEditRow
+              key={layer.id}
+              layer={layer}
+              itemCount={itemCounts.get(layer.id) ?? 0}
+              onCancel={() => setEditingId(null)}
+              onSave={async (name, color) => {
+                const result = await updateLayerAction(layer.id, name, color);
+                if (result?.error) return result.error;
+                setEditingId(null);
+                return null;
+              }}
+            />
+          ) : (
           <li
             key={layer.id}
-            // Delete only surfaces on hover/focus-within: it sits next to a
-            // control people toggle constantly, and shouldn't be equally
+            // Edit and delete only surface on hover/focus-within: they sit next
+            // to a control people toggle constantly, and shouldn't be equally
             // reachable by accident.
             className="group flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-[13px] hover:bg-neutral-900/[0.04]"
           >
@@ -1437,6 +1563,13 @@ function LayerPanel({
               style={{ background: layer.color ?? UNASSIGNED_COLOR }}
             />
             <span className="flex-1 truncate">{layer.name}</span>
+            <button
+              type="button"
+              onClick={() => setEditingId(layer.id)}
+              className="press rounded-md px-1.5 py-0.5 text-[12px] text-neutral-400 opacity-0 transition-opacity hover:text-neutral-900 focus:opacity-100 group-hover:opacity-100"
+            >
+              Edit
+            </button>
             <form
               action={async () => {
                 await deleteLayerAction(layer.id);
@@ -1459,7 +1592,8 @@ function LayerPanel({
               </button>
             </form>
           </li>
-        ))}
+          )
+        )}
         {layers.length === 0 && (
           <li className="px-2 text-[13px] text-neutral-400">No layers yet.</li>
         )}

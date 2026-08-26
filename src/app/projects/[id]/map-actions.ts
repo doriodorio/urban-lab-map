@@ -30,6 +30,37 @@ export async function createLayer(
   return { success: true };
 }
 
+export async function updateLayer(
+  projectId: string,
+  layerId: string,
+  name: string,
+  color: string
+): Promise<ActionResult> {
+  const trimmed = name.trim();
+  if (!trimmed) {
+    return { error: "Name is required." };
+  }
+  // The colour reaches the map as an inline style and an SVG stroke, so it is
+  // checked here rather than trusted from the picker.
+  if (!/^#[0-9a-fA-F]{6}$/.test(color)) {
+    return { error: "Colour must be a hex value like #3b82f6." };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("layers")
+    .update({ name: trimmed, color })
+    .eq("id", layerId)
+    .eq("project_id", projectId);
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  revalidatePath(`/projects/${projectId}`);
+  return { success: true };
+}
+
 export async function deleteLayer(projectId: string, layerId: string) {
   const supabase = await createClient();
   const { error } = await supabase.from("layers").delete().eq("id", layerId);

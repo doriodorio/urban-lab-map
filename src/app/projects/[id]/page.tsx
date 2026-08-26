@@ -5,6 +5,7 @@ import { MapEditor } from "./map-editor";
 import {
   createLayer,
   deleteLayer,
+  updateLayer,
   createItem,
   deleteItem,
   restoreItem,
@@ -145,6 +146,7 @@ export default async function ProjectMapPage({
       currentUserId={user.id}
       createLayerAction={createLayer.bind(null, project.id)}
       deleteLayerAction={deleteLayer.bind(null, project.id)}
+      updateLayerAction={updateLayer.bind(null, project.id)}
       createItemAction={createItem.bind(null, project.id)}
       deleteItemAction={deleteItem.bind(null, project.id)}
       restoreItemAction={restoreItem.bind(null, project.id)}
