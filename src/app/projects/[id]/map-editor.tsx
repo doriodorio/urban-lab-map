@@ -324,6 +324,82 @@ const MAX_LABELS_PER_SIDE = 9;
  * it has one, otherwise a video still, so link-and-video items aren't all
  * reduced to blank tiles.
  */
+/**
+ * Items describing the same place from different layers sit at the same
+ * coordinates, and a marker carries no offset - so they land exactly on top of
+ * each other and only the top one can be clicked.
+ *
+ * Coincidence is judged geographically, not in screen pixels: the case this
+ * exists for is deliberate (three views of one doorway), and those items are
+ * within a metre of each other at every zoom. Judging it by pixels would
+ * instead catch every unrelated item that happens to overlap when zoomed out,
+ * which is clustering - a different feature - and would make markers change
+ * shape as you zoom.
+ */
+const STACK_PRECISION = 5; // ~1m at these latitudes
+
+function stackedItemIds(items: Item[]): Set<string> {
+  const byPlace = new Map<string, string[]>();
+  for (const item of items) {
+    if (item.geometry.type !== "Point") continue;
+    const [lng, lat] = item.geometry.coordinates;
+    const key = `${lng.toFixed(STACK_PRECISION)},${lat.toFixed(STACK_PRECISION)}`;
+    byPlace.set(key, [...(byPlace.get(key) ?? []), item.id]);
+  }
+  const stacked = new Set<string>();
+  for (const ids of byPlace.values()) {
+    if (ids.length > 1) for (const id of ids) stacked.add(id);
+  }
+  return stacked;
+}
+
+/**
+ * A cross reads as a distinct mark at each 15 degrees, but it has four-fold
+ * symmetry - at 90 degrees it is back where it started. So the angles wrap
+ * after six layers, and layer colour, not angle, is what ultimately tells two
+ * marks apart. Angle is keyed to the layer's own position in the list so a
+ * layer's mark never changes when an unrelated layer is added.
+ */
+const STACK_ANGLE_STEP = 15;
+const STACK_DISTINCT_ANGLES = 90 / STACK_ANGLE_STEP;
+
+function paintMarker(
+  el: HTMLElement,
+  opts: { stacked: boolean; color: string; angle: number }
+) {
+  const { stacked, color, angle } = opts;
+  if (!stacked) {
+    el.replaceChildren();
+    el.style.width = "16px";
+    el.style.height = "16px";
+    el.style.borderRadius = "50%";
+    el.style.border = "2px solid white";
+    el.style.background = color;
+    el.style.boxShadow = "0 0 0 1px rgba(0,0,0,0.3)";
+    return;
+  }
+
+  el.style.width = "22px";
+  el.style.height = "22px";
+  el.style.borderRadius = "0";
+  el.style.border = "none";
+  el.style.background = "transparent";
+  el.style.boxShadow = "none";
+
+  // The white pass underneath is the same halo the circle gets from its
+  // border - without it a dark mark disappears against a dark base map.
+  const svg = `<svg viewBox="0 0 22 22" width="22" height="22" style="transform:rotate(${angle}deg);display:block">
+    <g stroke-linecap="round">
+      <path d="M11 3v16M3 11h16" stroke="white" stroke-width="6"/>
+      <path d="M11 3v16M3 11h16" stroke="${color}" stroke-width="3.5"/>
+    </g>
+  </svg>`;
+  if (el.dataset.mark !== svg) {
+    el.innerHTML = svg;
+    el.dataset.mark = svg;
+  }
+}
+
 function firstImage(item: Item) {
   const photo = item.media?.find((m) => m.type === "image")?.url;
   if (photo) return photo;
@@ -510,6 +586,14 @@ export function MapEditor({
 
   const layerColor = (layerId: string | null) =>
     layers.find((l) => l.id === layerId)?.color || UNASSIGNED_COLOR;
+
+  // Rotation is per layer, so the same layer always tilts its mark the same
+  // way across every stacked place on the map.
+  const layerAngle = (layerId: string | null) => {
+    const index = layers.findIndex((l) => l.id === layerId);
+    if (index < 0) return 0;
+    return (index % STACK_DISTINCT_ANGLES) * STACK_ANGLE_STEP;
+  };
 
   // Everything currently passing the layer, tag, date and search filters.
   // Declared here because the map effects below read it, not just the panels.
@@ -799,6 +883,9 @@ export function MapEditor({
       (i): i is Item & { geometry: { type: "Point"; coordinates: [number, number] } } =>
         i.geometry.type === "Point"
     );
+    // Judged across all point items, not just visible ones, so a mark does not
+    // change shape when a filter hides the item it was sharing a spot with.
+    const stacked = stackedItemIds(pointItems);
     const existingIds = new Set(pointItems.map((i) => i.id));
     for (const [id, marker] of markersRef.current) {
       if (!existingIds.has(id)) {
@@ -814,11 +901,6 @@ export function MapEditor({
       if (!marker) {
         const el = document.createElement("button");
         el.type = "button";
-        el.style.width = "16px";
-        el.style.height = "16px";
-        el.style.borderRadius = "50%";
-        el.style.border = "2px solid white";
-        el.style.boxShadow = "0 0 0 1px rgba(0,0,0,0.3)";
         el.style.cursor = "pointer";
         // Capturing the id (stable) rather than the item object (a per-render
         // snapshot) keeps this listener correct for the marker's whole life -
@@ -845,7 +927,11 @@ export function MapEditor({
       }
 
       const el = marker.getElement();
-      el.style.background = layerColor(item.layer_id);
+      paintMarker(el, {
+        stacked: stacked.has(item.id),
+        color: layerColor(item.layer_id),
+        angle: layerAngle(item.layer_id),
+      });
       el.style.display = visible ? "block" : "none";
 
       // Only the selected item can be dragged. Leaving every marker draggable
