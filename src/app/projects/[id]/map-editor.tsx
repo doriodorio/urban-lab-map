@@ -314,13 +314,25 @@ type LabelPlacement = {
   labelX: number;
 };
 
-// Each card carries a thumbnail and a title, so the rows are tall and the
-// margin has to be wide enough for both.
-const LABEL_ROW_HEIGHT = 58;
-const LABEL_MARGIN = 208;
-// Past this many per side the cards run out of vertical room and the leader
-// lines cross so heavily they stop indicating anything.
-const MAX_LABELS_PER_SIDE = 9;
+// A card is a square picture, a rule, then the title underneath - so its
+// width is the picture's and its height is picture plus caption.
+const LABEL_IMAGE_SIZE = 160;
+const LABEL_CAPTION_HEIGHT = 30;
+const LABEL_CARD_HEIGHT = LABEL_IMAGE_SIZE + LABEL_CAPTION_HEIGHT;
+// Enough gap that neighbouring cards read as separate rather than as a strip.
+const LABEL_ROW_HEIGHT = LABEL_CARD_HEIGHT + 10;
+const LABEL_MARGIN = LABEL_IMAGE_SIZE + 24;
+
+/**
+ * How many cards fit down one side.
+ *
+ * At this card size the limit is the window, not a taste judgement, so it is
+ * measured rather than fixed: a short window would otherwise stack cards on
+ * top of each other, and a tall one would leave room going unused.
+ */
+function maxLabelsPerSide(height: number) {
+  return Math.max(1, Math.floor(height / LABEL_ROW_HEIGHT));
+}
 
 /**
  * The picture that represents an item in the gallery view: its own photo if
@@ -427,15 +439,27 @@ function stackLabels(
   labelX: number
 ): LabelPlacement[] {
   const sorted = [...entries].sort((a, b) => a.pointY - b.pointY);
+  const half = LABEL_ROW_HEIGHT / 2;
+
   let previousBottom = -Infinity;
-  return sorted.map((entry) => {
-    const y = Math.min(
-      Math.max(entry.pointY, previousBottom + LABEL_ROW_HEIGHT),
-      height - LABEL_ROW_HEIGHT / 2
-    );
+  const laid = sorted.map((entry) => {
+    const y = Math.max(entry.pointY, previousBottom + LABEL_ROW_HEIGHT);
     previousBottom = y;
     return { ...entry, labelY: y, labelX };
   });
+  if (laid.length === 0) return laid;
+
+  // Clamping each card to the bottom edge as it was laid out piled them on top
+  // of each other down there. Instead the column keeps its spacing and slides
+  // up as a whole, as far as the top edge allows.
+  const overflow = laid[laid.length - 1].labelY + half - height;
+  const shift = Math.min(
+    Math.max(0, overflow),
+    Math.max(0, laid[0].labelY - half)
+  );
+  return shift === 0
+    ? laid
+    : laid.map((l) => ({ ...l, labelY: l.labelY - shift }));
 }
 
 export function MapEditor({
@@ -1017,8 +1041,9 @@ export function MapEditor({
 
         // When there are too many, keep the ones nearest the vertical middle:
         // they're the ones a reader is most likely looking at.
+        const cap = maxLabelsPerSide(height);
         const trim = (list: Omit<LabelPlacement, "labelY" | "labelX">[]) =>
-          list.length <= MAX_LABELS_PER_SIDE
+          list.length <= cap
             ? list
             : [...list]
                 .sort(
@@ -1026,7 +1051,7 @@ export function MapEditor({
                     Math.abs(a.pointY - height / 2) -
                     Math.abs(b.pointY - height / 2)
                 )
-                .slice(0, MAX_LABELS_PER_SIDE);
+                .slice(0, cap);
 
         setLabels([
           ...stackLabels(trim(sides.left), height, LABEL_MARGIN),
@@ -1689,13 +1714,13 @@ function MarginLabels({
           style={{
             top: l.labelY,
             [l.side]: 8,
-            width: LABEL_MARGIN - 20,
+            width: LABEL_IMAGE_SIZE,
+            border: "1px solid rgba(0,0,0,0.5)",
           }}
-          className={`press pointer-events-auto absolute flex -translate-y-1/2 items-center gap-2 rounded-md border border-rule bg-card p-1.5 text-left ${
-            // Mirrored so the thumbnail always sits on the outer edge and the
-            // text faces the map, next to where its line leaves.
-            l.side === "right" ? "flex-row-reverse text-right" : ""
-          }`}
+          className="press pointer-events-auto absolute flex -translate-y-1/2 flex-col overflow-hidden bg-card text-left"
+          // A hairline all the way round, so a card holds together as one
+          // object against whatever the map puts behind it.
+          data-card=""
         >
           {l.image ? (
             // eslint-disable-next-line @next/next/no-img-element
@@ -1703,21 +1728,35 @@ function MarginLabels({
               src={l.image}
               alt=""
               draggable={false}
-              className="h-11 w-11 shrink-0 rounded-lg object-cover"
-              style={{ outline: `2px solid ${l.color}`, outlineOffset: -2 }}
+              style={{ height: LABEL_IMAGE_SIZE, width: LABEL_IMAGE_SIZE }}
+              className="block object-cover"
             />
           ) : (
             // A document mark rather than an empty tile: an item with no
             // picture still has something to say, and a blank square reads as
             // a thumbnail that failed to load.
             <span
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg"
-              style={{ background: `${l.color}22`, outline: `2px solid ${l.color}`, outlineOffset: -2 }}
+              className="flex items-center justify-center"
+              style={{
+                height: LABEL_IMAGE_SIZE,
+                width: LABEL_IMAGE_SIZE,
+                background: `${l.color}1f`,
+              }}
             >
-              <DocumentMark color={l.color} />
+              <DocumentMark color={l.color} size={40} />
             </span>
           )}
-          <span className="line-clamp-2 flex-1 text-[11px] font-medium leading-tight text-neutral-800">
+          {/* The rule is the card's whole structure - it separates picture from
+              caption and squares the whole thing off. Kept near-black rather
+              than the layer colour so every card rules the same way. */}
+          <span
+            className="block w-full shrink-0"
+            style={{ height: 2, background: "rgba(0,0,0,0.8)" }}
+          />
+          <span
+            className="flex items-center truncate px-2 text-[12px] font-medium leading-none text-ink"
+            style={{ height: LABEL_CAPTION_HEIGHT }}
+          >
             {l.title}
           </span>
         </button>
@@ -1833,12 +1872,12 @@ function EmbeddedLink({
  * layer's own colour so a text item still reads as belonging to its layer at
  * thumbnail size, where the only other cue would be the tile's tint.
  */
-function DocumentMark({ color }: { color: string }) {
+function DocumentMark({ color, size = 20 }: { color: string; size?: number }) {
   return (
     <svg
       viewBox="0 0 24 24"
-      width="20"
-      height="20"
+      width={size}
+      height={size}
       fill="none"
       stroke={color}
       strokeWidth="1.75"
