@@ -2559,18 +2559,6 @@ function NewItemForm({
         ))}
       </select>
 
-      {showImage && (
-        <label className="flex flex-col gap-1 text-xs text-neutral-500">
-          {isCover ? "Cover image (optional)" : "Image"}
-          <input
-            type="file"
-            name="image"
-            accept="image/*"
-            className="text-sm"
-            onChange={offerPhotoLocation ? handleImageChange : undefined}
-          />
-        </label>
-      )}
       {urlFirst && (
         <label className="flex flex-col gap-1 text-xs text-neutral-500">
           {type === "video" ? "Video link" : "Web address"}
@@ -2612,6 +2600,19 @@ function NewItemForm({
             className="rounded-lg border border-rule bg-card px-2.5 py-1.5 text-[13px] outline-none focus:border-neutral-400"
           />
         </>
+      )}
+
+      {showImage && (
+        <label className="flex flex-col gap-1 text-xs text-neutral-500">
+          {isCover ? "Cover image (optional)" : "Image"}
+          <input
+            type="file"
+            name="image"
+            accept="image/*"
+            className="text-sm"
+            onChange={offerPhotoLocation ? handleImageChange : undefined}
+          />
+        </label>
       )}
 
       {checkingExif && (
