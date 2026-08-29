@@ -1,6 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import {
+  MarginLabels,
+  useMarginLabels,
+  galleryImage,
+  type GalleryEntry,
+} from "@/components/margin-labels";
 import * as maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { toVideoEmbed, linkHost } from "@/lib/embed";
@@ -159,6 +165,7 @@ export function PublicViewer({
   // Lifted out of ExplorePanel so the map narrows along with the result list -
   // matching the editor, where searching is what makes a dense map readable.
   const [query, setQuery] = useState("");
+  const [galleryOn, setGalleryOn] = useState(false);
 
   const itemById = new Map(items.map((i) => [i.id, i]));
   const steps = threadItems
@@ -194,6 +201,18 @@ export function PublicViewer({
   const exploreResults = items.filter(
     (i) => !hiddenLayerIds.has(i.layer_id ?? "unassigned") && matchesQuery(i)
   );
+
+  // Gallery cards for whatever the map is currently showing. Built from the
+  // same `visible` rule as the markers, so a card never points at a hidden
+  // item - and laid out by the same hook the editor uses.
+  const galleryEntries: GalleryEntry[] = items.filter(visible).map((item) => ({
+    id: item.id,
+    title: item.title || "Untitled",
+    image: galleryImage(item.media),
+    color: layerColor(item.layer_id),
+    lngLat: centroid(item.geometry),
+  }));
+  const labels = useMarginLabels(mapRef, galleryEntries, galleryOn);
 
   useEffect(() => {
     if (!mapContainer.current || mapRef.current) return;
@@ -419,6 +438,29 @@ export function PublicViewer({
     <div className="flex h-screen w-full flex-col md:flex-row">
       <div className="relative min-h-0 flex-1">
         <div ref={mapContainer} className="h-full w-full" />
+
+        {galleryOn && (
+          <MarginLabels
+            labels={labels}
+            onSelect={(id) => {
+              // A card is a way into the item, so selecting one also leaves
+              // the narrated tour - the reader has stepped off the path.
+              setMode("explore");
+              setSelectedItemId(id);
+            }}
+          />
+        )}
+
+        <button
+          type="button"
+          onClick={() => setGalleryOn((on) => !on)}
+          title="Show items as thumbnails with their titles in the margins"
+          className={`press absolute right-3 top-3 z-10 rounded-md border border-rule px-3 py-1.5 text-[12px] font-medium ${
+            galleryOn ? "bg-ink text-white" : "bg-card text-ink"
+          }`}
+        >
+          Gallery
+        </button>
 
         <div className="absolute left-3 top-3 max-w-[70%] rounded-md border border-rule bg-card px-3.5 py-2.5">
           <p className="text-[15px] font-semibold leading-tight tracking-[-0.01em]">
