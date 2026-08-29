@@ -83,12 +83,12 @@ export function ThreadsManager({
         </h2>
 
         {threads.length === 0 && (
-          <p className="text-sm text-neutral-400">No threads yet.</p>
+          <p className="text-sm text-ink-muted">No threads yet.</p>
         )}
 
         <ul className="flex flex-col gap-2">
           {threads.map((thread) => (
-            <li key={thread.id} className="rounded border border-neutral-200">
+            <li key={thread.id} className="rounded border border-rule">
               <button
                 onClick={() =>
                   setOpenThreadId(openThreadId === thread.id ? null : thread.id)
@@ -96,7 +96,7 @@ export function ThreadsManager({
                 className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left"
               >
                 <span className="text-sm font-medium">{thread.name}</span>
-                <span className="text-xs text-neutral-400">
+                <span className="text-xs text-ink-muted">
                   {steps.filter((s) => s.thread_id === thread.id).length} steps
                   {openThreadId === thread.id ? " ▾" : " ▸"}
                 </span>
@@ -122,7 +122,7 @@ export function ThreadsManager({
         </ul>
       </section>
 
-      <section className="flex flex-col gap-3 border-t border-neutral-200 pt-6">
+      <section className="flex flex-col gap-3 border-t border-rule pt-6">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-500">
           New thread
         </h2>
@@ -132,18 +132,18 @@ export function ThreadsManager({
             name="name"
             required
             placeholder="e.g. The walk along the wadi"
-            className="rounded border border-neutral-300 px-3 py-2 text-sm"
+            className="rounded-md border border-rule bg-card px-3 py-2 text-sm outline-none focus:border-neutral-400"
           />
           <textarea
             name="description"
             rows={2}
             placeholder="What does this tour show? (optional)"
-            className="rounded border border-neutral-300 px-3 py-2 text-sm"
+            className="rounded-md border border-rule bg-card px-3 py-2 text-sm outline-none focus:border-neutral-400"
           />
           <button
             type="submit"
             disabled={pending}
-            className="self-start rounded bg-black px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+            className="self-start press rounded-md bg-ink px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
           >
             {pending ? "Creating…" : "Create thread"}
           </button>
@@ -199,7 +199,7 @@ function ThreadEditor({
   const itemById = new Map(items.map((i) => [i.id, i]));
 
   return (
-    <div className="flex flex-col gap-5 border-t border-neutral-200 p-3">
+    <div className="flex flex-col gap-5 border-t border-rule p-3">
       <form action={formAction} className="flex flex-col gap-2">
         <input
           type="text"
@@ -219,7 +219,7 @@ function ThreadEditor({
           <button
             type="submit"
             disabled={pending}
-            className="rounded bg-black px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+            className="press rounded-md bg-ink px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
           >
             {pending ? "Saving…" : "Save"}
           </button>
@@ -238,7 +238,7 @@ function ThreadEditor({
         </h3>
 
         {steps.length === 0 && (
-          <p className="text-sm text-neutral-400">
+          <p className="text-sm text-ink-muted">
             No steps yet — add items below to build the tour.
           </p>
         )}
@@ -249,7 +249,7 @@ function ThreadEditor({
             return (
               <li
                 key={step.item_id}
-                className="flex flex-col gap-1 rounded border border-neutral-200 p-2"
+                className="flex flex-col gap-1 rounded border border-rule p-2"
               >
                 <div className="flex items-start justify-between gap-2">
                   <span className="text-sm font-medium">
@@ -277,7 +277,7 @@ function ThreadEditor({
                     >
                       <button
                         type="submit"
-                        className="text-xs text-neutral-400 underline hover:text-red-600"
+                        className="text-xs text-ink-muted underline hover:text-red-600"
                       >
                         Remove
                       </button>
@@ -308,7 +308,7 @@ function ThreadEditor({
           className="rounded border border-neutral-300 px-2 py-1.5 text-sm"
         />
         {candidates.length === 0 ? (
-          <p className="text-sm text-neutral-400">
+          <p className="text-sm text-ink-muted">
             {items.length === inThread.size
               ? "Every item is already in this thread."
               : "No items match."}
@@ -350,7 +350,7 @@ function ThreadEditor({
             e.preventDefault();
           }
         }}
-        className="border-t border-neutral-200 pt-3"
+        className="border-t border-rule pt-3"
       >
         <button type="submit" className="text-sm text-red-600 underline">
           Delete thread

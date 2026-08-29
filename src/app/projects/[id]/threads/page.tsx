@@ -54,7 +54,7 @@ export default async function ThreadsPage({
   if (loadError) {
     return (
       <main className="mx-auto flex min-h-screen max-w-3xl flex-col justify-center gap-4 px-6">
-        <h1 className="text-lg font-semibold">Couldn&apos;t load threads</h1>
+        <h1 className="display text-lg">Couldn&apos;t load threads</h1>
         <pre className="overflow-x-auto rounded bg-neutral-100 p-3 text-xs">
           {loadError.message}
         </pre>
@@ -89,7 +89,7 @@ export default async function ThreadsPage({
         >
           ← Map
         </Link>
-        <h1 className="text-xl font-semibold">{project.name} — Threads</h1>
+        <h1 className="display text-xl">{project.name} — Threads</h1>
       </div>
 
       <p className="text-sm text-neutral-600">

@@ -21,7 +21,7 @@ export default function NewProjectPage() {
         <Link href="/projects" className="text-sm text-neutral-500 underline">
           ← Workspace
         </Link>
-        <h1 className="mt-2 text-xl font-semibold">New project</h1>
+        <h1 className="display mt-2 text-xl">New project</h1>
       </div>
 
       <form action={formAction} className="flex flex-col gap-3">
@@ -33,7 +33,7 @@ export default function NewProjectPage() {
             id="name"
             name="name"
             required
-            className="rounded border border-neutral-300 px-3 py-2 text-sm"
+            className="rounded-md border border-rule bg-card px-3 py-2 text-sm outline-none focus:border-neutral-400"
           />
         </div>
 
@@ -45,14 +45,14 @@ export default function NewProjectPage() {
             id="description"
             name="description"
             rows={3}
-            className="rounded border border-neutral-300 px-3 py-2 text-sm"
+            className="rounded-md border border-rule bg-card px-3 py-2 text-sm outline-none focus:border-neutral-400"
           />
         </div>
 
         <button
           type="submit"
           disabled={pending}
-          className="rounded bg-black px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+          className="press rounded-md bg-ink px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
         >
           {pending ? "Creating…" : "Create project"}
         </button>

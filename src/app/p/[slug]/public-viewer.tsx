@@ -420,7 +420,7 @@ export function PublicViewer({
       <div className="relative min-h-0 flex-1">
         <div ref={mapContainer} className="h-full w-full" />
 
-        <div className="material material-edge absolute backdrop-blur-xl backdrop-saturate-150 left-3 top-3 max-w-[70%] rounded-2xl px-3.5 py-2.5">
+        <div className="absolute left-3 top-3 max-w-[70%] rounded-md border border-rule bg-card px-3.5 py-2.5">
           <p className="text-[15px] font-semibold leading-tight tracking-[-0.01em]">
             {project.name}
           </p>
@@ -432,9 +432,9 @@ export function PublicViewer({
         </div>
       </div>
 
-      <aside className="material-panel flex max-h-[48vh] backdrop-blur-2xl backdrop-saturate-150 w-full flex-col overflow-y-auto md:max-h-none md:w-96">
+      <aside className="flex max-h-[48vh] w-full flex-col overflow-y-auto border-rule bg-card md:max-h-none md:w-96 md:border-l">
         {threads.length > 0 && (
-          <div className="material sticky top-0 z-10 flex text-sm backdrop-blur-xl backdrop-saturate-150">
+          <div className="sticky top-0 z-10 flex border-b border-rule bg-card text-sm">
             <ModeTab
               label="Guided tour"
               active={mode === "tour"}
@@ -531,7 +531,7 @@ function PublicEmbeddedLink({ url }: { url: string }) {
 
   if (embed) {
     return (
-      <div className="overflow-hidden rounded-xl bg-black/5">
+      <div className="overflow-hidden rounded-md border border-rule bg-black/5">
         <iframe
           src={embed}
           title="Embedded video"
@@ -550,10 +550,10 @@ function PublicEmbeddedLink({ url }: { url: string }) {
       href={url}
       target="_blank"
       rel="noreferrer noopener"
-      className="press flex flex-col gap-0.5 rounded-lg border border-neutral-300/70 bg-white/60 px-2.5 py-2"
+      className="press flex flex-col gap-0.5 rounded-lg border border-rule bg-card px-2.5 py-2"
     >
       {host && (
-        <span className="text-[11px] font-medium uppercase tracking-[0.06em] text-neutral-500">
+        <span className="label">
           {host}
         </span>
       )}
@@ -663,14 +663,14 @@ function TourPanel({
                 onClick={() => onStepChange(stepIndex - 1)}
                 disabled={stepIndex === 0}
                 aria-label="Previous stop"
-                className="press rounded-full border border-neutral-300/80 bg-white/60 px-3.5 py-1.5 text-[13px] disabled:opacity-35"
+                className="press rounded-md border border-rule bg-card px-3.5 py-1.5 text-[13px] disabled:opacity-35"
               >
                 ←
               </button>
               <button
                 onClick={() => onStepChange(stepIndex + 1)}
                 disabled={stepIndex >= steps.length - 1}
-                className="press rounded-full bg-neutral-900 px-4 py-1.5 text-[13px] font-medium text-white disabled:opacity-35"
+                className="press rounded-md bg-ink px-4 py-1.5 text-[13px] font-medium text-white disabled:opacity-35"
               >
                 Next
               </button>
@@ -678,7 +678,7 @@ function TourPanel({
           </div>
 
           {steps.length > 1 && (
-            <p className="text-[12px] text-neutral-400 md:hidden">
+            <p className="text-[12px] text-ink-muted md:hidden">
               Swipe the card to move between stops
             </p>
           )}
@@ -717,7 +717,7 @@ function ExplorePanel({
 
       {layers.length > 0 && (
         <div className="flex flex-col gap-1.5">
-          <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-neutral-500">
+          <p className="label">
             Layers
           </p>
           {layers.map((layer) => (
@@ -742,7 +742,7 @@ function ExplorePanel({
       )}
 
       <div className="flex flex-col gap-1">
-        <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-neutral-500">
+        <p className="label">
           {results.length} items
         </p>
         <ul className="-mx-2 flex max-h-64 flex-col overflow-y-auto">
@@ -775,7 +775,7 @@ function ItemCard({
 }) {
   return (
     <div
-      className={`scroll-edge flex flex-col gap-2.5 border-t border-neutral-900/[0.06] px-4 pb-6 pt-4 ${className ?? ""}`}
+      className={`flex flex-col gap-2.5 border-t border-rule px-4 pb-6 pt-4 ${className ?? ""}`}
     >
       {/* The guide's voice, set apart from the item's own content. */}
       {narration && (
@@ -785,7 +785,7 @@ function ItemCard({
       )}
 
       {layerName && (
-        <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-neutral-500">
+        <p className="label">
           {layerName}
         </p>
       )}
@@ -810,7 +810,7 @@ function ItemCard({
               src={m.url}
               alt={item.title ?? ""}
               draggable={false}
-              className="w-full rounded-xl shadow-sm"
+              className="w-full rounded-md border border-rule"
             />
           );
         }
@@ -819,7 +819,7 @@ function ItemCard({
         }
         if (m.type === "video") {
           return (
-            <video key={i} controls src={m.url} className="w-full rounded-xl" />
+            <video key={i} controls src={m.url} className="w-full rounded-md" />
           );
         }
         return <PublicEmbeddedLink key={i} url={m.url} />;
@@ -841,7 +841,7 @@ function ItemCard({
           {item.tags?.map((tag) => (
             <span
               key={tag}
-              className="rounded-full bg-neutral-900/[0.06] px-2 py-0.5 text-[11px] text-neutral-600"
+              className="rounded-md bg-ink/[0.06] px-2 py-0.5 text-[11px] text-ink-secondary"
             >
               {tag}
             </span>

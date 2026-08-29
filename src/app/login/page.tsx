@@ -25,7 +25,7 @@ export default function LoginPage() {
   return (
     <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center gap-6 px-6">
       <div>
-        <h1 className="text-xl font-semibold">Urban Lab Map</h1>
+        <h1 className="display text-xl">Urban Lab Map</h1>
         <p className="text-sm text-neutral-500">
           Sign in with a magic link — no password needed.
         </p>
@@ -43,12 +43,12 @@ export default function LoginPage() {
             placeholder="you@bezalel.ac.il"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="rounded border border-neutral-300 px-3 py-2 text-sm"
+            className="rounded-md border border-rule bg-card px-3 py-2 text-sm outline-none focus:border-neutral-400"
           />
           <button
             type="submit"
             disabled={status === "sending"}
-            className="rounded bg-black px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+            className="press rounded-md bg-ink px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
           >
             {status === "sending" ? "Sending…" : "Send magic link"}
           </button>

@@ -73,7 +73,7 @@ export default async function ProjectSettingsPage({
       </div>
 
       <section className="flex flex-col gap-3">
-        <h1 className="text-xl font-semibold">{project.name}</h1>
+        <h1 className="display text-xl">{project.name}</h1>
         <EditProjectForm
           action={updateProject.bind(null, project.id)}
           name={project.name}
@@ -106,7 +106,7 @@ export default async function ProjectSettingsPage({
                 {member.display_name ? (
                   <>
                     {member.display_name}{" "}
-                    <span className="text-neutral-400">({member.email})</span>
+                    <span className="text-ink-muted">({member.email})</span>
                   </>
                 ) : (
                   member.email
@@ -128,7 +128,7 @@ export default async function ProjectSettingsPage({
         <InviteMemberForm action={inviteMember.bind(null, project.id)} />
       </section>
 
-      <section className="border-t border-neutral-200 pt-6">
+      <section className="border-t border-rule pt-6">
         <DeleteProjectButton action={deleteProject.bind(null, project.id)} />
       </section>
     </main>

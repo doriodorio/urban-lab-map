@@ -32,7 +32,7 @@ export function EditProjectForm({
           name="name"
           defaultValue={name}
           required
-          className="rounded border border-neutral-300 px-3 py-2 text-sm"
+          className="rounded-md border border-rule bg-card px-3 py-2 text-sm outline-none focus:border-neutral-400"
         />
       </div>
       <div className="flex flex-col gap-1">
@@ -44,14 +44,14 @@ export function EditProjectForm({
           name="description"
           defaultValue={description ?? ""}
           rows={3}
-          className="rounded border border-neutral-300 px-3 py-2 text-sm"
+          className="rounded-md border border-rule bg-card px-3 py-2 text-sm outline-none focus:border-neutral-400"
         />
       </div>
       <div className="flex items-center gap-3">
         <button
           type="submit"
           disabled={pending}
-          className="rounded bg-black px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+          className="press rounded-md bg-ink px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
         >
           {pending ? "Saving…" : "Save"}
         </button>
@@ -77,12 +77,12 @@ export function InviteMemberForm({ action }: { action: BoundAction }) {
           name="email"
           required
           placeholder="teammate@bezalel.ac.il"
-          className="flex-1 rounded border border-neutral-300 px-3 py-1.5 text-sm"
+          className="flex-1 rounded-md border border-rule bg-card px-3 py-1.5 text-sm outline-none focus:border-neutral-400"
         />
         <button
           type="submit"
           disabled={pending}
-          className="rounded bg-black px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+          className="press rounded-md bg-ink px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
         >
           {pending ? "Adding…" : "Add"}
         </button>
@@ -105,7 +105,7 @@ export function RemoveMemberButton({
     >
       <button
         type="submit"
-        className="text-xs text-neutral-400 underline hover:text-red-600"
+        className="text-xs text-ink-muted underline hover:text-red-600"
       >
         Remove
       </button>
@@ -149,7 +149,7 @@ export function PublishControls({
         </p>
         <button
           type="submit"
-          className="self-start rounded bg-black px-3 py-1.5 text-sm font-medium text-white"
+          className="self-start press rounded-md bg-ink px-3 py-1.5 text-sm font-medium text-white"
         >
           Publish
         </button>

@@ -76,7 +76,7 @@ export default async function ProjectMapPage({
   if (loadError) {
     return (
       <main className="mx-auto flex min-h-screen max-w-lg flex-col justify-center gap-4 px-6">
-        <h1 className="text-lg font-semibold">Couldn&apos;t load this map</h1>
+        <h1 className="display text-lg">Couldn&apos;t load this map</h1>
         <p className="text-sm text-neutral-600">
           Your items are still stored — this is a problem reading them, not a
           deletion. Retry in a moment; if it persists, send this to whoever

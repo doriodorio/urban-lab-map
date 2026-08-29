@@ -84,38 +84,11 @@ body {
 }
 
 /* ---------------------------------------------------------------------------
-   Public viewer surface treatment.
-   Translucent chrome that content scrolls under, rather than opaque bars that
-   consume a fixed strip. Each material declares its own fallbacks for the
-   accessibility preferences below.
+   Chrome floats over the map as paper with a hairline, so the translucent
+   materials and the mask that faded content beneath them are gone - a rule
+   does that work now, and it survives every accessibility preference below
+   without a fallback.
    ------------------------------------------------------------------------ */
-
-/* The blur itself comes from Tailwind's backdrop-blur/backdrop-saturate
-   utilities in the markup, not from here: a hand-written `backdrop-filter`
-   gets dropped by Lightning CSS on the way through Tailwind v4's pipeline,
-   while its own utilities survive it. These classes carry the tint and the
-   accessibility fallbacks. */
-.material {
-  background: rgba(255, 255, 255, 0.72);
-}
-
-/* Bigger surfaces read as thicker - they pair this with a stronger blur. */
-.material-panel {
-  background: rgba(255, 255, 255, 0.82);
-}
-
-/* A bright top edge reads as light catching the material. */
-.material-edge {
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.65),
-    0 8px 30px rgba(0, 0, 0, 0.12);
-}
-
-/* Fade content where it meets floating chrome instead of drawing a 1px rule. */
-.scroll-edge {
-  mask-image: linear-gradient(to bottom, transparent 0, black 14px);
-  -webkit-mask-image: linear-gradient(to bottom, transparent 0, black 14px);
-}
 
 /* Feedback belongs on the press, and it has to be instant. */
 .press {
@@ -158,22 +131,17 @@ body {
   }
 }
 
-/* Translucency off means frostier/solid, not merely less blurry. The
-   !important is deliberate: it has to beat the Tailwind backdrop utility
-   sitting on the same element. */
-@media (prefers-reduced-transparency: reduce) {
-  .material,
-  .material-panel {
-    background: #ffffff;
-    backdrop-filter: none !important;
-  }
-}
+/* Nothing is translucent any more, so there is no prefers-reduced-transparency
+   rule to write: every surface is already opaque.
 
+   High contrast still has work to do. The catalog leans on hairlines and grey
+   labels to separate things, and both are exactly what thins out for a reader
+   who asked for more contrast - so darken them at the token, which carries the
+   change to every rule and label at once. */
 @media (prefers-contrast: more) {
-  .material,
-  .material-panel {
-    background: #ffffff;
-    backdrop-filter: none !important;
-    border: 1px solid #111111;
+  :root {
+    --rule: #6b7176;
+    --ink-secondary: #2c3136;
+    --ink-muted: #5a6167;
   }
 }

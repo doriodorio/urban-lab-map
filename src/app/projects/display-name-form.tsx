@@ -32,12 +32,12 @@ export function DisplayNameForm({
         <button
           type="submit"
           disabled={pending}
-          className="rounded bg-black px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+          className="press rounded-md bg-ink px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
         >
           {pending ? "Saving…" : "Save"}
         </button>
       </div>
-      <p className="text-xs text-neutral-400">
+      <p className="text-xs text-ink-muted">
         Shown instead of your email next to items you add. Leave empty to go
         back to using your email.
       </p>
