@@ -451,6 +451,7 @@ export function MapEditor({
   restoreItemAction,
   purgeItemAction,
   updateItemLayerAction,
+  updateItemUrlAction,
   updateItemTagsAction,
   updateItemGeometryAction,
   createItemLinkAction,
@@ -480,6 +481,7 @@ export function MapEditor({
     itemId: string,
     layerId: string | null
   ) => Promise<ActionResult>;
+  updateItemUrlAction: (itemId: string, url: string) => Promise<ActionResult>;
   updateItemTagsAction: (
     itemId: string,
     tags: string[]
@@ -1396,6 +1398,8 @@ export function MapEditor({
             moveError={moveError}
             deleteItemAction={deleteItemAction}
             updateItemLayerAction={updateItemLayerAction}
+            updateItemUrlAction={updateItemUrlAction}
+            currentUserId={currentUserId}
             updateItemTagsAction={updateItemTagsAction}
             createItemLinkAction={createItemLinkAction}
             deleteItemLinkAction={deleteItemLinkAction}
@@ -1719,7 +1723,104 @@ function MarginLabels({
  * shown as a link with its host, so a reader can see where it goes before
  * clicking. Unrecognised URLs are never framed - see toVideoEmbed.
  */
-function EmbeddedLink({ url }: { url: string }) {
+/**
+ * The link on a link/video item, with an editor for whoever added it.
+ *
+ * `onSave` is absent for everyone else, which is what hides the control - the
+ * server enforces the same rule, so this only spares people a button that
+ * would refuse them.
+ */
+function EmbeddedLink({
+  url,
+  onSave,
+}: {
+  url: string;
+  onSave?: (next: string) => Promise<string | null>;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(url);
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  if (editing && onSave) {
+    const preview = toVideoEmbed(draft);
+    return (
+      <div className="flex flex-col gap-2 rounded-lg border border-rule bg-card p-2.5">
+        <label className="label" htmlFor="item-url">
+          Link
+        </label>
+        <input
+          id="item-url"
+          type="url"
+          value={draft}
+          autoFocus
+          onChange={(e) => {
+            setDraft(e.target.value);
+            setError(null);
+          }}
+          className="w-full rounded-lg border border-rule bg-card px-2.5 py-1.5 text-[13px] outline-none focus:border-neutral-400"
+        />
+        {/* Says up front whether the new link will play or fall back to a
+            plain link, so the difference isn't a surprise after saving. */}
+        <p className="text-[11px] text-ink-muted">
+          {draft.trim() === ""
+            ? "A link is required."
+            : preview
+              ? "This one plays in place."
+              : "Kept as a link — only YouTube and Vimeo play in place."}
+        </p>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            disabled={saving || !draft.trim() || draft.trim() === url}
+            onClick={async () => {
+              setSaving(true);
+              const message = await onSave(draft.trim());
+              setSaving(false);
+              if (message) setError(message);
+              else setEditing(false);
+            }}
+            className="press rounded-md bg-ink px-3.5 py-1 text-[12px] font-medium text-white disabled:opacity-40"
+          >
+            {saving ? "Saving…" : "Save link"}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setDraft(url);
+              setError(null);
+              setEditing(false);
+            }}
+            className="press rounded-md px-3 py-1 text-[12px] text-ink-muted hover:text-ink"
+          >
+            Cancel
+          </button>
+        </div>
+        {error && <p className="text-[12px] text-red-600">{error}</p>}
+      </div>
+    );
+  }
+
+  return (
+    <div className="group/link flex flex-col gap-1">
+      <EmbeddedLinkBody url={url} />
+      {onSave && (
+        <button
+          type="button"
+          onClick={() => {
+            setDraft(url);
+            setEditing(true);
+          }}
+          className="press label self-start opacity-0 transition-opacity hover:text-ink focus:opacity-100 group-hover/link:opacity-100"
+        >
+          Change link
+        </button>
+      )}
+    </div>
+  );
+}
+
+function EmbeddedLinkBody({ url }: { url: string }) {
   const embed = toVideoEmbed(url);
 
   if (embed) {
@@ -2528,11 +2629,13 @@ function ItemDetail({
   allItems,
   linked,
   memberNames,
+  currentUserId,
   canUndoMove,
   onUndoMove,
   moveError,
   deleteItemAction,
   updateItemLayerAction,
+  updateItemUrlAction,
   updateItemTagsAction,
   createItemLinkAction,
   deleteItemLinkAction,
@@ -2544,6 +2647,7 @@ function ItemDetail({
   allItems: Item[];
   linked: { link: ItemLink; other: Item }[];
   memberNames: Record<string, string>;
+  currentUserId: string;
   canUndoMove: boolean;
   onUndoMove: () => void;
   moveError: string | null;
@@ -2552,6 +2656,7 @@ function ItemDetail({
     itemId: string,
     layerId: string | null
   ) => Promise<ActionResult>;
+  updateItemUrlAction: (itemId: string, url: string) => Promise<ActionResult>;
   updateItemTagsAction: (
     itemId: string,
     tags: string[]
@@ -2680,7 +2785,20 @@ function ItemDetail({
             <video key={i} controls src={m.url} className="w-full rounded-xl" />
           );
         }
-        return <EmbeddedLink key={i} url={m.url} />;
+        return (
+          <EmbeddedLink
+            key={i}
+            url={m.url}
+            onSave={
+              item.created_by && item.created_by === currentUserId
+                ? async (next) => {
+                    const result = await updateItemUrlAction(item.id, next);
+                    return result?.error ?? null;
+                  }
+                : undefined
+            }
+          />
+        );
       })}
 
       {item.body && (

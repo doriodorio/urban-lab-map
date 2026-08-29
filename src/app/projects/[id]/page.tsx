@@ -11,6 +11,7 @@ import {
   restoreItem,
   purgeItem,
   updateItemLayer,
+  updateItemUrl,
   updateItemTags,
   updateItemGeometry,
   createItemLink,
@@ -152,6 +153,7 @@ export default async function ProjectMapPage({
       restoreItemAction={restoreItem.bind(null, project.id)}
       purgeItemAction={purgeItem.bind(null, project.id)}
       updateItemLayerAction={updateItemLayer.bind(null, project.id)}
+      updateItemUrlAction={updateItemUrl.bind(null, project.id)}
       updateItemTagsAction={updateItemTags.bind(null, project.id)}
       updateItemGeometryAction={updateItemGeometry.bind(null, project.id)}
       createItemLinkAction={createItemLink.bind(null, project.id)}

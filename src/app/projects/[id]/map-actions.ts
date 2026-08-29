@@ -374,6 +374,85 @@ function storagePathFromUrl(url: string): string | null {
 // items_delete_creator RLS policy (see purge_items.sql); the explicit checks
 // here exist to return a useful message instead of a silent no-op, since a
 // blocked delete comes back as "0 rows affected" rather than an error.
+/**
+ * Replace the URL on a link or video item.
+ *
+ * Restricted to whoever added the item, matching permanent delete. A URL is
+ * the whole of these items - swapping it silently replaces one person's
+ * source with another's under their name, which is not the same kind of edit
+ * as fixing a title.
+ */
+export async function updateItemUrl(
+  projectId: string,
+  itemId: string,
+  url: string
+): Promise<ActionResult> {
+  const trimmed = url.trim();
+  if (!trimmed) {
+    return { error: "A link is required." };
+  }
+
+  let parsed: URL;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    return { error: "That isn't a valid link." };
+  }
+  if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+    return { error: "Links must start with http:// or https://" };
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { error: "Not signed in." };
+  }
+
+  const { data: item, error: readError } = await supabase
+    .from("items")
+    .select("id, created_by, type, media")
+    .eq("id", itemId)
+    .eq("project_id", projectId)
+    .maybeSingle();
+
+  if (readError) {
+    return { error: readError.message };
+  }
+  if (!item) {
+    return { error: "Item not found." };
+  }
+  if (item.type !== "link" && item.type !== "video") {
+    return { error: "Only link and video items have a link to change." };
+  }
+  if (item.created_by !== user.id) {
+    return {
+      error: item.created_by
+        ? "Only the person who added this item can change its link."
+        : "This item predates authorship tracking, so it has no owner who can change its link.",
+    };
+  }
+
+  // These items carry exactly one embed entry, written at creation. Rebuilding
+  // it rather than editing in place keeps any stray entries from surviving.
+  const { error } = await supabase
+    .from("items")
+    .update({
+      media: [{ url: trimmed, type: "embed" }],
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", itemId);
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  revalidatePath(`/projects/${projectId}`);
+  return { success: true };
+}
+
 export async function purgeItem(
   projectId: string,
   itemId: string
