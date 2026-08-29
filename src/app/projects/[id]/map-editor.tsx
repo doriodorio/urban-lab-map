@@ -1704,10 +1704,15 @@ function MarginLabels({
               style={{ outline: `2px solid ${l.color}`, outlineOffset: -2 }}
             />
           ) : (
+            // A document mark rather than an empty tile: an item with no
+            // picture still has something to say, and a blank square reads as
+            // a thumbnail that failed to load.
             <span
-              className="h-11 w-11 shrink-0 rounded-lg"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg"
               style={{ background: `${l.color}22`, outline: `2px solid ${l.color}`, outlineOffset: -2 }}
-            />
+            >
+              <DocumentMark color={l.color} />
+            </span>
           )}
           <span className="line-clamp-2 flex-1 text-[11px] font-medium leading-tight text-neutral-800">
             {l.title}
@@ -1817,6 +1822,31 @@ function EmbeddedLink({
         </button>
       )}
     </div>
+  );
+}
+
+/**
+ * A page with a turned corner and a couple of ruled lines. Drawn in the
+ * layer's own colour so a text item still reads as belonging to its layer at
+ * thumbnail size, where the only other cue would be the tile's tint.
+ */
+function DocumentMark({ color }: { color: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="20"
+      height="20"
+      fill="none"
+      stroke={color}
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M14 3H7a1.5 1.5 0 0 0-1.5 1.5v15A1.5 1.5 0 0 0 7 21h10a1.5 1.5 0 0 0 1.5-1.5V7.5Z" />
+      <path d="M14 3v4.5h4.5" />
+      <path d="M9 13h6M9 16.5h4" />
+    </svg>
   );
 }
 
@@ -2441,7 +2471,14 @@ function NewItemForm({
     (photoCoords[0] !== geometry.coordinates[0] ||
       photoCoords[1] !== geometry.coordinates[1]);
 
-  const showImage = type === "image" || type === "composite";
+  // A photo is the substance of an image item and illustrative on a text one,
+  // so both offer the field - but only the former offers to take the item's
+  // location from the photo. A cover picked to illustrate a note was often
+  // taken somewhere else entirely, and offering to move the note there would
+  // be wrong more often than right.
+  const showImage =
+    type === "image" || type === "composite" || type === "text";
+  const offerPhotoLocation = type === "image" || type === "composite";
   const urlFirst = URL_FIRST_TYPES.has(type);
   const showMedia =
     type === "interview" || type === "document" || type === "composite";
@@ -2520,13 +2557,13 @@ function NewItemForm({
 
       {showImage && (
         <label className="flex flex-col gap-1 text-xs text-neutral-500">
-          Image
+          {type === "text" ? "Cover image (optional)" : "Image"}
           <input
             type="file"
             name="image"
             accept="image/*"
             className="text-sm"
-            onChange={handleImageChange}
+            onChange={offerPhotoLocation ? handleImageChange : undefined}
           />
         </label>
       )}
@@ -2579,7 +2616,7 @@ function NewItemForm({
       {photoNote && !checkingExif && (
         <p className="text-xs text-neutral-500">{photoNote}</p>
       )}
-      {exifChecked && !checkingExif && !photoCoords && showImage && (
+      {exifChecked && !checkingExif && !photoCoords && offerPhotoLocation && (
         <p className="text-xs text-neutral-400">
           No location data found in this photo.
         </p>
