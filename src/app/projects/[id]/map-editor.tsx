@@ -228,6 +228,9 @@ const TYPE_OPTIONS: { value: string; label: string; bodyLabel: string }[] = [
 /** Types whose whole point is a URL, so the field is shown prominently. */
 const URL_FIRST_TYPES = new Set(["link", "video"]);
 
+/** Types where a picture illustrates the item rather than being the item. */
+const COVER_IMAGE_TYPES = new Set(["text", "document"]);
+
 function bodyLabelFor(type: string) {
   return TYPE_OPTIONS.find((t) => t.value === type)?.bodyLabel ?? "Notes";
 }
@@ -2471,13 +2474,14 @@ function NewItemForm({
     (photoCoords[0] !== geometry.coordinates[0] ||
       photoCoords[1] !== geometry.coordinates[1]);
 
-  // A photo is the substance of an image item and illustrative on a text one,
-  // so both offer the field - but only the former offers to take the item's
-  // location from the photo. A cover picked to illustrate a note was often
-  // taken somewhere else entirely, and offering to move the note there would
-  // be wrong more often than right.
-  const showImage =
-    type === "image" || type === "composite" || type === "text";
+  // A photo is the substance of an image item and illustrative on a note or a
+  // citation, so all of them offer the field - but only the first kind offers
+  // to take the item's location from the photo. A cover picked to illustrate a
+  // note, or the jacket of a book being cited, was often taken somewhere else
+  // entirely, and offering to move the item there would be wrong more often
+  // than right.
+  const isCover = COVER_IMAGE_TYPES.has(type);
+  const showImage = type === "image" || type === "composite" || isCover;
   const offerPhotoLocation = type === "image" || type === "composite";
   const urlFirst = URL_FIRST_TYPES.has(type);
   const showMedia =
@@ -2557,7 +2561,7 @@ function NewItemForm({
 
       {showImage && (
         <label className="flex flex-col gap-1 text-xs text-neutral-500">
-          {type === "text" ? "Cover image (optional)" : "Image"}
+          {isCover ? "Cover image (optional)" : "Image"}
           <input
             type="file"
             name="image"
