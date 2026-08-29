@@ -1,30 +1,86 @@
 @import "tailwindcss";
 
+/* ---------------------------------------------------------------------------
+   Catalog palette.
+
+   The tool is a research archive - the students' own model for it runs
+   נושא → סדרה → תת-סדרה → תיק → פריט - so the surface is paper and hairlines
+   rather than glass and depth. Ink is a warm near-black, never pure #000, so
+   it sits on the off-white without vibrating.
+
+   Crimson is the accession colour and is spent on nothing else: item codes,
+   series numbers, counts. If it starts appearing on buttons it stops meaning
+   "this is a catalog reference".
+   ------------------------------------------------------------------------ */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f8f9fa;
+  --foreground: #23282d;
+
+  --paper: #f8f9fa;
+  --card: #ffffff;
+  --ink: #23282d;
+  --ink-secondary: #4a5158;
+  --ink-muted: #8d949c;
+  --rule: #d6dadd;
+  --accession: #8e1b33;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --color-paper: var(--paper);
+  --color-card: var(--card);
+  --color-ink: var(--ink);
+  --color-ink-secondary: var(--ink-secondary);
+  --color-ink-muted: var(--ink-muted);
+  --color-rule: var(--rule);
+  --color-accession: var(--accession);
+  --font-sans: var(--font-sans);
+  --font-display: var(--font-display);
+  --font-mono: var(--font-mono);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  /* The platform font already ships optical sizing, tracking tables and
-     legibility tuning - override it only with a reason to. */
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-family: var(--font-sans), system-ui, sans-serif;
+}
+
+/* Headings run tight. Archivo is drawn to take it; the negative tracking is
+   what separates a catalog heading from ordinary bold body text. */
+.display {
+  font-family: var(--font-display), system-ui, sans-serif;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+/* Every small label in the interface: section indices, field labels, counts,
+   stamps. Uppercase monospace at wide tracking is the whole device - it is
+   what makes a column of codes scan as a catalog rather than as prose. At
+   11px the tracking has to be this wide or the caps close up. */
+.label {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 11px;
+  line-height: 1.45;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+
+/* An accession code - LYR · 003, ITM · 012. Same mechanics as .label, but
+   carrying the one colour reserved for catalog references. */
+.code {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accession);
+}
+
+/* Hairline. A catalog separates rows with a ruled line, not with a gap or a
+   shadow, so this is used freely and always at 1px. */
+.rule {
+  border-color: var(--rule);
 }
 
 /* ---------------------------------------------------------------------------

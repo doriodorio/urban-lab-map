@@ -1165,7 +1165,7 @@ export function MapEditor({
           <MarginLabels labels={labels} onSelect={setSelectedItemId} />
         )}
 
-        <div className="material material-edge absolute left-3 top-3 flex items-center gap-3 rounded-2xl px-3.5 py-2 backdrop-blur-xl backdrop-saturate-150">
+        <div className="absolute left-3 top-3 flex items-center gap-3 rounded-md border border-rule bg-card px-3.5 py-2">
           <Link
             href="/projects"
             className="press rounded-lg px-1 text-[13px] text-neutral-500 hover:text-neutral-900"
@@ -1173,7 +1173,7 @@ export function MapEditor({
             ← Workspace
           </Link>
 
-          <span className="text-[15px] font-semibold leading-tight tracking-[-0.01em]">
+          <span className="display max-w-[22ch] truncate whitespace-nowrap text-[15px] leading-tight">
             {project.name}
           </span>
 
@@ -1211,7 +1211,7 @@ export function MapEditor({
             value={mapStyleId}
             onChange={(e) => setMapStyleId(e.target.value)}
             aria-label="Base map style"
-            className="rounded-lg border border-neutral-300/70 bg-white/60 px-2 py-1 text-[13px] outline-none focus:border-neutral-400"
+            className="rounded-lg border border-rule bg-card px-2 py-1 text-[13px] outline-none focus:border-neutral-400"
           >
             {MAP_STYLES.map((s) => (
               <option key={s.id} value={s.id}>
@@ -1226,7 +1226,7 @@ export function MapEditor({
               choice shows up next to the thing that raised it. */}
           {(drawMode === "line" || drawMode === "polygon") &&
             drawPoints.length > 0 && (
-              <div className="material material-edge step-forward flex items-center gap-2 rounded-2xl p-1.5 backdrop-blur-xl backdrop-saturate-150">
+              <div className="step-forward flex items-center gap-2 rounded-md border border-rule bg-card p-1.5">
                 <button
                   onClick={finishDrawing}
                   disabled={!minPointsMet}
@@ -1248,7 +1248,7 @@ export function MapEditor({
 
           {/* One segmented control rather than three separate pills: they're
               mutually exclusive states of the same choice. */}
-          <div className="material material-edge flex items-center gap-1 rounded-2xl p-1.5 backdrop-blur-xl backdrop-saturate-150">
+          <div className="flex items-center gap-1 rounded-md border border-rule bg-card p-1.5">
             <DrawTool
               label="Point"
               active={drawMode === "point"}
@@ -1277,7 +1277,7 @@ export function MapEditor({
 
       {/* Widened from 320px: five tabs plus an item detail panel were fighting
           for the same strip, and "Base map" wrapped. */}
-      <aside className="material-panel flex w-96 flex-col overflow-y-auto border-l border-neutral-900/[0.08] backdrop-blur-2xl backdrop-saturate-150">
+      <aside className="flex w-96 flex-col overflow-y-auto border-l border-rule bg-card">
         {/* Search sits above the tabs rather than inside Filters: it's reached
             constantly, and shouldn't cost a tab switch to get to. */}
         <SearchBox
@@ -1288,7 +1288,7 @@ export function MapEditor({
           onSelectResult={focusItem}
         />
 
-        <div className="material sticky top-0 z-10 flex backdrop-blur-xl backdrop-saturate-150">
+        <div className="sticky top-0 z-10 flex border-b border-rule bg-card">
           <PanelTab
             label="Layers"
             active={panel === "layers"}
@@ -1454,7 +1454,7 @@ function LayerEditRow({
           value={color}
           onChange={(e) => setColor(e.target.value)}
           aria-label={`Colour for ${layer.name}`}
-          className="h-8 w-8 shrink-0 cursor-pointer rounded-lg border border-neutral-300/70 bg-white/60 p-1"
+          className="h-8 w-8 shrink-0 cursor-pointer rounded-lg border border-rule bg-card p-1"
         />
         <input
           type="text"
@@ -1462,7 +1462,7 @@ function LayerEditRow({
           onChange={(e) => setName(e.target.value)}
           aria-label={`Name for ${layer.name}`}
           autoFocus
-          className="min-w-0 flex-1 rounded-lg border border-neutral-300/70 bg-white/80 px-2.5 py-1.5 text-[13px] outline-none focus:border-neutral-400"
+          className="min-w-0 flex-1 rounded-lg border border-rule bg-card px-2.5 py-1.5 text-[13px] outline-none focus:border-neutral-400"
         />
       </div>
       <div className="flex items-center gap-2">
@@ -1475,7 +1475,7 @@ function LayerEditRow({
             setError(await onSave(name, color));
             setSaving(false);
           }}
-          className="press rounded-full bg-neutral-900 px-3.5 py-1 text-[12px] font-medium text-white disabled:opacity-40"
+          className="press rounded-md bg-ink px-3.5 py-1 text-[12px] font-medium text-white disabled:opacity-40"
         >
           {saving ? "Saving…" : "Save"}
         </button>
@@ -1563,6 +1563,9 @@ function LayerPanel({
               style={{ background: layer.color ?? UNASSIGNED_COLOR }}
             />
             <span className="flex-1 truncate">{layer.name}</span>
+            <span className="code shrink-0 tabular-nums opacity-70 group-hover:opacity-0">
+              LYR&middot;{String(layers.indexOf(layer) + 1).padStart(3, "0")}
+            </span>
             <button
               type="button"
               onClick={() => setEditingId(layer.id)}
@@ -1601,9 +1604,9 @@ function LayerPanel({
 
       <form
         action={formAction}
-        className="flex flex-col gap-2 border-t border-neutral-900/[0.08] pt-3"
+        className="flex flex-col gap-2 border-t border-rule pt-3"
       >
-        <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-neutral-500">
+        <p className="label">
           New layer
         </p>
         <div className="flex gap-2">
@@ -1612,20 +1615,20 @@ function LayerPanel({
             name="color"
             defaultValue="#3b82f6"
             aria-label="Layer colour"
-            className="h-9 w-9 cursor-pointer rounded-lg border border-neutral-300/70 bg-white/60 p-1"
+            className="h-9 w-9 cursor-pointer rounded-lg border border-rule bg-card p-1"
           />
           <input
             type="text"
             name="name"
             required
             placeholder="e.g. Interviews"
-            className="flex-1 rounded-lg border border-neutral-300/70 bg-white/60 px-2.5 py-1.5 text-[13px] outline-none focus:border-neutral-400"
+            className="flex-1 rounded-lg border border-rule bg-card px-2.5 py-1.5 text-[13px] outline-none focus:border-neutral-400"
           />
         </div>
         <button
           type="submit"
           disabled={pending}
-          className="press self-start rounded-full bg-neutral-900 px-4 py-1.5 text-[13px] font-medium text-white disabled:opacity-40"
+          className="press self-start rounded-md bg-ink px-4 py-1.5 text-[13px] font-medium text-white disabled:opacity-40"
         >
           {pending ? "Adding…" : "Add layer"}
         </button>
@@ -1681,7 +1684,7 @@ function MarginLabels({
             [l.side]: 8,
             width: LABEL_MARGIN - 20,
           }}
-          className={`material material-edge press pointer-events-auto absolute flex -translate-y-1/2 items-center gap-2 rounded-xl p-1.5 text-left backdrop-blur-md ${
+          className={`press pointer-events-auto absolute flex -translate-y-1/2 items-center gap-2 rounded-md border border-rule bg-card p-1.5 text-left ${
             // Mirrored so the thumbnail always sits on the outer edge and the
             // text faces the map, next to where its line leaves.
             l.side === "right" ? "flex-row-reverse text-right" : ""
@@ -1740,10 +1743,10 @@ function EmbeddedLink({ url }: { url: string }) {
       href={url}
       target="_blank"
       rel="noreferrer noopener"
-      className="press flex flex-col gap-0.5 rounded-lg border border-neutral-300/70 bg-white/60 px-2.5 py-2 hover:border-neutral-400"
+      className="press flex flex-col gap-0.5 rounded-lg border border-rule bg-card px-2.5 py-2 hover:border-neutral-400"
     >
       {host && (
-        <span className="text-[11px] font-medium uppercase tracking-[0.06em] text-neutral-500">
+        <span className="label">
           {host}
         </span>
       )}
@@ -1835,7 +1838,7 @@ function SearchBox({
           value={query}
           onChange={(e) => onQueryChange(e.target.value)}
           placeholder="Search title, text, source, tag…"
-          className="w-full rounded-lg border border-neutral-300/70 bg-white/60 px-2.5 py-1.5 text-[13px] outline-none focus:border-neutral-400"
+          className="w-full rounded-lg border border-rule bg-card px-2.5 py-1.5 text-[13px] outline-none focus:border-neutral-400"
         />
       </div>
 
@@ -2008,7 +2011,7 @@ function ImportPanel({
         value={layerId}
         onChange={(e) => setLayerId(e.target.value)}
         disabled={running}
-        className="rounded-lg border border-neutral-300/70 bg-white/60 px-2.5 py-1.5 text-[13px] outline-none focus:border-neutral-400"
+        className="rounded-lg border border-rule bg-card px-2.5 py-1.5 text-[13px] outline-none focus:border-neutral-400"
       >
         <option value="">No layer</option>
         {layers.map((l) => (
@@ -2035,7 +2038,7 @@ function ImportPanel({
       <button
         onClick={runImport}
         disabled={running || files.length === 0}
-        className="press self-start rounded-full bg-neutral-900 px-4 py-1.5 text-[13px] font-medium text-white disabled:opacity-40"
+        className="press self-start rounded-md bg-ink px-4 py-1.5 text-[13px] font-medium text-white disabled:opacity-40"
       >
         {running
           ? `Importing… ${done + failed} of ${files.length}`
@@ -2192,7 +2195,7 @@ function FiltersPanel({
   return (
     <div className="flex flex-col gap-5 p-4">
       <div className="flex flex-col gap-2">
-        <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-neutral-500">
+        <p className="label">
           Tags
         </p>
         {allTags.length === 0 && (
@@ -2213,7 +2216,7 @@ function FiltersPanel({
       </div>
 
       <div className="flex flex-col gap-2 border-t border-neutral-200 pt-4">
-        <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-neutral-500">
+        <p className="label">
           Timeline
         </p>
         <label className="flex flex-col gap-1 text-xs text-neutral-500">
@@ -2222,7 +2225,7 @@ function FiltersPanel({
             type="date"
             value={dateFrom ?? ""}
             onChange={(e) => onDateFromChange(e.target.value || null)}
-            className="rounded-lg border border-neutral-300/70 bg-white/60 px-2.5 py-1.5 text-[13px] outline-none focus:border-neutral-400"
+            className="rounded-lg border border-rule bg-card px-2.5 py-1.5 text-[13px] outline-none focus:border-neutral-400"
           />
         </label>
         <label className="flex flex-col gap-1 text-xs text-neutral-500">
@@ -2231,7 +2234,7 @@ function FiltersPanel({
             type="date"
             value={dateTo ?? ""}
             onChange={(e) => onDateToChange(e.target.value || null)}
-            className="rounded-lg border border-neutral-300/70 bg-white/60 px-2.5 py-1.5 text-[13px] outline-none focus:border-neutral-400"
+            className="rounded-lg border border-rule bg-card px-2.5 py-1.5 text-[13px] outline-none focus:border-neutral-400"
           />
         </label>
         {(dateFrom || dateTo) && (
@@ -2348,7 +2351,7 @@ function NewItemForm({
       action={formAction}
       className="flex flex-col gap-2 border-t border-neutral-200 p-4"
     >
-      <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-neutral-500">
+      <p className="label">
         New item — {geometryLabel(geometry)}
       </p>
       <input type="hidden" name="geometry" value={JSON.stringify(geometry)} />
@@ -2357,7 +2360,7 @@ function NewItemForm({
       <select
         value={type}
         onChange={(e) => setType(e.target.value)}
-        className="rounded-lg border border-neutral-300/70 bg-white/60 px-2.5 py-1.5 text-[13px] outline-none focus:border-neutral-400"
+        className="rounded-lg border border-rule bg-card px-2.5 py-1.5 text-[13px] outline-none focus:border-neutral-400"
       >
         {TYPE_OPTIONS.map((t) => (
           <option key={t.value} value={t.value}>
@@ -2371,39 +2374,39 @@ function NewItemForm({
         name="title"
         required
         placeholder="Title"
-        className="rounded-lg border border-neutral-300/70 bg-white/60 px-2.5 py-1.5 text-[13px] outline-none focus:border-neutral-400"
+        className="rounded-lg border border-rule bg-card px-2.5 py-1.5 text-[13px] outline-none focus:border-neutral-400"
       />
       <textarea
         name="body"
         rows={3}
         placeholder={bodyLabelFor(type)}
-        className="rounded-lg border border-neutral-300/70 bg-white/60 px-2.5 py-1.5 text-[13px] outline-none focus:border-neutral-400"
+        className="rounded-lg border border-rule bg-card px-2.5 py-1.5 text-[13px] outline-none focus:border-neutral-400"
       />
       {showAttribution && (
         <input
           type="text"
           name="attribution"
           placeholder="Attribution (interviewee, source, citation…)"
-          className="rounded-lg border border-neutral-300/70 bg-white/60 px-2.5 py-1.5 text-[13px] outline-none focus:border-neutral-400"
+          className="rounded-lg border border-rule bg-card px-2.5 py-1.5 text-[13px] outline-none focus:border-neutral-400"
         />
       )}
       <input
         type="text"
         name="tags"
         placeholder="Tags, comma separated"
-        className="rounded-lg border border-neutral-300/70 bg-white/60 px-2.5 py-1.5 text-[13px] outline-none focus:border-neutral-400"
+        className="rounded-lg border border-rule bg-card px-2.5 py-1.5 text-[13px] outline-none focus:border-neutral-400"
       />
       <label className="flex flex-col gap-1 text-xs text-neutral-500">
         Date
         <input
           type="date"
           name="date_start"
-          className="rounded-lg border border-neutral-300/70 bg-white/60 px-2.5 py-1.5 text-[13px] outline-none focus:border-neutral-400"
+          className="rounded-lg border border-rule bg-card px-2.5 py-1.5 text-[13px] outline-none focus:border-neutral-400"
         />
       </label>
       <select
         name="layer_id"
-        className="rounded-lg border border-neutral-300/70 bg-white/60 px-2.5 py-1.5 text-[13px] outline-none focus:border-neutral-400"
+        className="rounded-lg border border-rule bg-card px-2.5 py-1.5 text-[13px] outline-none focus:border-neutral-400"
         defaultValue=""
       >
         <option value="">No layer</option>
@@ -2438,7 +2441,7 @@ function NewItemForm({
                 ? "https://youtube.com/watch?v=…"
                 : "https://…"
             }
-            className="rounded-lg border border-neutral-300/70 bg-white/60 px-2.5 py-1.5 text-[13px] outline-none focus:border-neutral-400"
+            className="rounded-lg border border-rule bg-card px-2.5 py-1.5 text-[13px] outline-none focus:border-neutral-400"
           />
           {type === "video" && (
             <span className="text-[11px] text-neutral-400">
@@ -2464,7 +2467,7 @@ function NewItemForm({
             type="text"
             name="media_url"
             placeholder="or paste a link (YouTube, Vimeo, SoundCloud…)"
-            className="rounded-lg border border-neutral-300/70 bg-white/60 px-2.5 py-1.5 text-[13px] outline-none focus:border-neutral-400"
+            className="rounded-lg border border-rule bg-card px-2.5 py-1.5 text-[13px] outline-none focus:border-neutral-400"
           />
         </>
       )}
@@ -2502,7 +2505,7 @@ function NewItemForm({
         <button
           type="submit"
           disabled={pending}
-          className="press self-start rounded-full bg-neutral-900 px-4 py-1.5 text-[13px] font-medium text-white disabled:opacity-40"
+          className="press self-start rounded-md bg-ink px-4 py-1.5 text-[13px] font-medium text-white disabled:opacity-40"
         >
           {pending ? "Saving…" : "Add item"}
         </button>
@@ -2617,14 +2620,14 @@ function ItemDetail({
   }
 
   return (
-    <div className="step-forward flex flex-col gap-2.5 border-t border-neutral-900/[0.08] p-4">
+    <div className="step-forward flex flex-col gap-2.5 border-t border-rule p-4">
       <div className="flex items-center justify-between gap-2">
         <select
           value={layerId}
           onChange={handleLayerChange}
           disabled={savingLayer}
           aria-label="Layer"
-          className="flex-1 rounded-lg border border-neutral-300/70 bg-white/60 px-2 py-1 text-[11px] font-medium uppercase tracking-[0.06em] text-neutral-600 outline-none focus:border-neutral-400"
+          className="flex-1 rounded-lg border border-rule bg-card px-2 py-1 label outline-none focus:border-neutral-400"
         >
           <option value="">No layer</option>
           {layers.map((l) => (
@@ -2646,7 +2649,7 @@ function ItemDetail({
         {TYPE_OPTIONS.find((t) => t.value === item.type)?.label ?? item.type}
       </span>
 
-      <h3 className="text-[18px] font-semibold leading-[1.15] tracking-[-0.02em]">
+      <h3 className="display text-[18px] leading-[1.15]">
         {item.title}
       </h3>
 
@@ -2728,12 +2731,12 @@ function ItemDetail({
           onChange={(e) => setTagsInput(e.target.value)}
           onBlur={handleTagsBlur}
           placeholder="comma, separated, tags"
-          className="rounded-lg border border-neutral-300/70 bg-white/60 px-2.5 py-1.5 text-[13px] outline-none focus:border-neutral-400"
+          className="rounded-lg border border-rule bg-card px-2.5 py-1.5 text-[13px] outline-none focus:border-neutral-400"
         />
       </label>
 
       <div className="flex flex-col gap-2 border-t border-neutral-200 pt-3">
-        <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-neutral-500">
+        <p className="label">
           Linked items
         </p>
 
@@ -2797,12 +2800,12 @@ function ItemDetail({
                   value={linkNote}
                   onChange={(e) => setLinkNote(e.target.value)}
                   placeholder="How are they related? (optional)"
-                  className="rounded-lg border border-neutral-300/70 bg-white/60 px-2.5 py-1.5 text-[13px] outline-none focus:border-neutral-400"
+                  className="rounded-lg border border-rule bg-card px-2.5 py-1.5 text-[13px] outline-none focus:border-neutral-400"
                 />
                 <button
                   onClick={handleCreateLink}
                   disabled={linking}
-                  className="press self-start rounded-full bg-neutral-900 px-4 py-1.5 text-[13px] font-medium text-white disabled:opacity-40"
+                  className="press self-start rounded-md bg-ink px-4 py-1.5 text-[13px] font-medium text-white disabled:opacity-40"
                 >
                   {linking ? "Linking…" : "Add link"}
                 </button>
@@ -2814,7 +2817,7 @@ function ItemDetail({
                   value={linkQuery}
                   onChange={(e) => setLinkQuery(e.target.value)}
                   placeholder="Link to… search by title, text, tag"
-                  className="rounded-lg border border-neutral-300/70 bg-white/60 px-2.5 py-1.5 text-[13px] outline-none focus:border-neutral-400"
+                  className="rounded-lg border border-rule bg-card px-2.5 py-1.5 text-[13px] outline-none focus:border-neutral-400"
                 />
                 <ul className="flex max-h-48 flex-col overflow-y-auto">
                   {matchingCandidates.slice(0, 30).map((i) => (
@@ -2916,7 +2919,7 @@ function BaseMapPanel({
               type="number"
               step="any"
               required
-              className="rounded-lg border border-neutral-300/70 bg-white/60 px-2.5 py-1.5 text-[13px] outline-none focus:border-neutral-400"
+              className="rounded-lg border border-rule bg-card px-2.5 py-1.5 text-[13px] outline-none focus:border-neutral-400"
             />
           </label>
           <label className="flex flex-col gap-1 text-xs text-neutral-500">
@@ -2926,7 +2929,7 @@ function BaseMapPanel({
               type="number"
               step="any"
               required
-              className="rounded-lg border border-neutral-300/70 bg-white/60 px-2.5 py-1.5 text-[13px] outline-none focus:border-neutral-400"
+              className="rounded-lg border border-rule bg-card px-2.5 py-1.5 text-[13px] outline-none focus:border-neutral-400"
             />
           </label>
           <label className="flex flex-col gap-1 text-xs text-neutral-500">
@@ -2936,7 +2939,7 @@ function BaseMapPanel({
               type="number"
               step="any"
               required
-              className="rounded-lg border border-neutral-300/70 bg-white/60 px-2.5 py-1.5 text-[13px] outline-none focus:border-neutral-400"
+              className="rounded-lg border border-rule bg-card px-2.5 py-1.5 text-[13px] outline-none focus:border-neutral-400"
             />
           </label>
           <label className="flex flex-col gap-1 text-xs text-neutral-500">
@@ -2946,14 +2949,14 @@ function BaseMapPanel({
               type="number"
               step="any"
               required
-              className="rounded-lg border border-neutral-300/70 bg-white/60 px-2.5 py-1.5 text-[13px] outline-none focus:border-neutral-400"
+              className="rounded-lg border border-rule bg-card px-2.5 py-1.5 text-[13px] outline-none focus:border-neutral-400"
             />
           </label>
         </div>
         <button
           type="submit"
           disabled={pending}
-          className="press self-start rounded-full bg-neutral-900 px-4 py-1.5 text-[13px] font-medium text-white disabled:opacity-40"
+          className="press self-start rounded-md bg-ink px-4 py-1.5 text-[13px] font-medium text-white disabled:opacity-40"
         >
           {pending ? "Uploading…" : "Set base map"}
         </button>
