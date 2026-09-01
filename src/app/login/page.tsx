@@ -1,9 +1,30 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
-export default function LoginPage() {
+/**
+ * Why the callback sent someone back here.
+ *
+ * Only our own two reasons are recognised and each maps to fixed text -
+ * nothing from the query string is rendered, so a crafted link cannot put
+ * words on the sign-in page.
+ */
+function CallbackNotice() {
+  const reason = useSearchParams().get("reason");
+  if (reason !== "expired" && reason !== "failed") return null;
+
+  return (
+    <p className="rounded-md border border-rule bg-card px-3 py-2 text-sm text-ink-secondary">
+      {reason === "expired"
+        ? "That sign-in link had expired or was already used. Links last about an hour and work once — send a fresh one below."
+        : "That sign-in link couldn't be used. Send a fresh one below."}
+    </p>
+  );
+}
+
+function LoginForm() {
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">(
     "idle"
@@ -30,6 +51,8 @@ export default function LoginPage() {
           Sign in with a magic link — no password needed.
         </p>
       </div>
+
+      <CallbackNotice />
 
       {status === "sent" ? (
         <p className="text-sm">
@@ -60,5 +83,15 @@ export default function LoginPage() {
         </form>
       )}
     </main>
+  );
+}
+
+// useSearchParams needs a Suspense boundary, or the whole route opts out of
+// prerendering.
+export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginForm />
+    </Suspense>
   );
 }

@@ -6,6 +6,7 @@ import {
   createLayer,
   deleteLayer,
   updateLayer,
+  updateBaseMapStyle,
   createItem,
   deleteItem,
   restoreItem,
@@ -35,11 +36,20 @@ export default async function ProjectMapPage({
     redirect("/login");
   }
 
-  const { data: project } = await supabase
+  const { data: project, error: projectError } = await supabase
     .from("projects")
-    .select("id, name, base_map_image_url, base_map_bounds")
+    .select("id, name, base_map_image_url, base_map_bounds, base_map_style")
     .eq("id", id)
     .maybeSingle();
+
+  // A failed query is not a missing project. Swallowing the error here turned
+  // a pending migration into "project not found", which sends you looking for
+  // a deleted row instead of at the column the query asked for.
+  if (projectError) {
+    throw new Error(
+      `Couldn't load this project: ${projectError.message}. If this names a column, a migration in supabase/ still needs running.`
+    );
+  }
 
   if (!project) {
     notFound();
@@ -148,6 +158,7 @@ export default async function ProjectMapPage({
       createLayerAction={createLayer.bind(null, project.id)}
       deleteLayerAction={deleteLayer.bind(null, project.id)}
       updateLayerAction={updateLayer.bind(null, project.id)}
+      updateBaseMapStyleAction={updateBaseMapStyle.bind(null, project.id)}
       createItemAction={createItem.bind(null, project.id)}
       deleteItemAction={deleteItem.bind(null, project.id)}
       restoreItemAction={restoreItem.bind(null, project.id)}

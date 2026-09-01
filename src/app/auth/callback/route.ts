@@ -31,18 +31,48 @@ function resolveDestination(next: string | null, origin: string): string {
   }
 }
 
+/**
+ * Sends the reader back to sign in, saying why.
+ *
+ * Silently bouncing to a blank sign-in page is indistinguishable from the app
+ * being broken - and the most common reason is a link that expired or was
+ * already opened, which the person can fix themselves the moment they are
+ * told. Mail scanners that prefetch links are a routine cause: the token is
+ * single-use, so a preview fetch can burn it before the human clicks.
+ *
+ * `reason` is our own text, never the provider's - an error string from a
+ * query parameter would otherwise be reflected onto the page.
+ */
+function backToLogin(origin: string, reason: string) {
+  const url = new URL("/login", origin);
+  url.searchParams.set("reason", reason);
+  return NextResponse.redirect(url);
+}
+
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
   const destination = resolveDestination(searchParams.get("next"), origin);
 
-  if (code) {
-    const supabase = await createClient();
-    const { error } = await supabase.auth.exchangeCodeForSession(code);
-    if (!error) {
-      return NextResponse.redirect(new URL(destination, origin));
-    }
+  // Supabase reports a refused link by redirecting here with its own error
+  // parameters rather than a code.
+  const errorCode = searchParams.get("error_code");
+  if (errorCode) {
+    return backToLogin(
+      origin,
+      errorCode === "otp_expired" ? "expired" : "failed"
+    );
   }
 
-  return NextResponse.redirect(new URL("/login", origin));
+  if (!code) {
+    return backToLogin(origin, "failed");
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.auth.exchangeCodeForSession(code);
+  if (error) {
+    return backToLogin(origin, "failed");
+  }
+
+  return NextResponse.redirect(new URL(destination, origin));
 }
