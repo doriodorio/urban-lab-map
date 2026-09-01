@@ -10,6 +10,7 @@ type PublicProject = {
     description: string | null;
     base_map_image_url: string | null;
     base_map_bounds: [[number, number], [number, number]] | null;
+    base_map_style: string | null;
     public_slug: string;
   };
   layers: { id: string; name: string; color: string | null }[];

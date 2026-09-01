@@ -7,8 +7,8 @@ import {
   findStyle,
   buildRasterStyle,
   initialStyle,
-  ensureRtlTextSupport,
 } from "@/lib/base-maps";
+import { ensureRtlTextSupport } from "@/lib/rtl-text";
 import {
   MarginLabels,
   useMarginLabels,
@@ -124,6 +124,7 @@ export function PublicViewer({
     description: string | null;
     base_map_image_url: string | null;
     base_map_bounds: [[number, number], [number, number]] | null;
+    base_map_style: string | null;
   };
   layers: Layer[];
   items: Item[];
@@ -161,7 +162,12 @@ export function PublicViewer({
   // matching the editor, where searching is what makes a dense map readable.
   const [query, setQuery] = useState("");
   const [galleryOn, setGalleryOn] = useState(false);
-  const [mapStyleId, setMapStyleId] = useState(DEFAULT_STYLE_ID);
+  // Opens on the base map the project was arranged on. The picker stays, so a
+  // reader can still switch - but the map they land on is the one the group
+  // built.
+  const [mapStyleId, setMapStyleId] = useState(
+    project.base_map_style ?? DEFAULT_STYLE_ID
+  );
   // Bumped whenever setStyle() replaces the whole style, which discards every
   // source and layer we added - the shape layers and the base-map overlay have
   // to be rebuilt against the new one.
@@ -223,7 +229,7 @@ export function PublicViewer({
 
     const map = new maplibregl.Map({
       container: mapContainer.current,
-      style: initialStyle(DEFAULT_STYLE_ID),
+      style: initialStyle(project.base_map_style ?? DEFAULT_STYLE_ID),
       center: DEFAULT_CENTER,
       zoom: 12,
     });
@@ -236,6 +242,10 @@ export function PublicViewer({
       mapRef.current = null;
       markers.clear();
     };
+    // Mount-once. The project's base map is read here as a starting style;
+    // later changes to it belong to the switching effect below, which swaps
+    // the style in place rather than rebuilding the map.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Custom base-map overlay, kept under the item shapes.

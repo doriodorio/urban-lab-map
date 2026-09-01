@@ -13,8 +13,8 @@ import {
   findStyle,
   buildRasterStyle,
   RASTER_ATTRIBUTION,
-  ensureRtlTextSupport,
 } from "@/lib/base-maps";
+import { ensureRtlTextSupport } from "@/lib/rtl-text";
 import {
   MarginLabels,
   useMarginLabels,
@@ -45,6 +45,8 @@ type Project = {
   name: string;
   base_map_image_url: string | null;
   base_map_bounds: [[number, number], [number, number]] | null;
+    /** The base map this project is arranged on; null falls back to default. */
+    base_map_style: string | null;
 };
 type ItemLink = {
   id: string;
@@ -289,6 +291,7 @@ export function MapEditor({
   createLayerAction,
   deleteLayerAction,
   updateLayerAction,
+  updateBaseMapStyleAction,
   createItemAction,
   deleteItemAction,
   restoreItemAction,
@@ -311,6 +314,7 @@ export function MapEditor({
   currentUserId: string;
   createLayerAction: BoundAction;
   deleteLayerAction: (layerId: string) => Promise<ActionResult>;
+  updateBaseMapStyleAction: (styleId: string) => Promise<ActionResult>;
   updateLayerAction: (
     layerId: string,
     name: string,
@@ -382,7 +386,11 @@ export function MapEditor({
   const [panel, setPanel] = useState<
     "layers" | "filters" | "import" | "basemap" | "trash" | null
   >("layers");
-  const [mapStyleId, setMapStyleId] = useState(DEFAULT_STYLE_ID);
+  // Seeded from the project so the editor opens on the map the group chose,
+  // and so what a visitor sees matches what was arranged here.
+  const [mapStyleId, setMapStyleId] = useState(
+    project.base_map_style ?? DEFAULT_STYLE_ID
+  );
   // Gallery view: items show as thumbnails and their titles run down the
   // margins with leader lines, so the map reads as an annotated plate rather
   // than a set of pins you have to click one at a time.
@@ -391,6 +399,7 @@ export function MapEditor({
   // source and layer we added. Effects that build our own layers depend on it
   // so they re-run and put everything back.
   const [styleEpoch, setStyleEpoch] = useState(0);
+  const [styleSaveError, setStyleSaveError] = useState<string | null>(null);
 
   // Remembers where a dragged item came from so the move can be undone.
   // There's no undo anywhere else in the app, and an accidental drag would
@@ -984,7 +993,17 @@ export function MapEditor({
 
           <select
             value={mapStyleId}
-            onChange={(e) => setMapStyleId(e.target.value)}
+            onChange={(e) => {
+              const next = e.target.value;
+              // Switch immediately, then record it. The map is the feedback,
+              // so it should not wait on a round trip; if the save fails the
+              // choice is simply not remembered for the published view, which
+              // the notice below says.
+              setMapStyleId(next);
+              void updateBaseMapStyleAction(next).then((result) => {
+                setStyleSaveError(result?.error ?? null);
+              });
+            }}
             aria-label="Base map style"
             className="rounded-lg border border-rule bg-card px-2 py-1 text-[13px] outline-none focus:border-neutral-400"
           >
@@ -994,6 +1013,11 @@ export function MapEditor({
               </option>
             ))}
           </select>
+          {styleSaveError && (
+            <span className="text-[11px] text-red-600">
+              Shown here, but not saved for the published view.
+            </span>
+          )}
         </div>
 
         <div className="absolute bottom-3 left-3 flex flex-col items-start gap-2">

@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { MAP_STYLES } from "@/lib/base-maps";
 
 type ActionResult = { error?: string; success?: boolean };
 
@@ -27,6 +28,39 @@ export async function createLayer(
   }
 
   revalidatePath(`/projects/${projectId}`);
+  return { success: true };
+}
+
+/**
+ * Remember the base map this project is arranged on, so the published view
+ * opens on the same map rather than a global default.
+ *
+ * Any member can set it: the base map is a property of the project the group
+ * is building together, not of the person who happened to click last.
+ */
+export async function updateBaseMapStyle(
+  projectId: string,
+  styleId: string
+): Promise<ActionResult> {
+  // The id is written into the project row and later used to pick a style, so
+  // it is checked against the real list rather than stored as free text.
+  if (!MAP_STYLES.some((s) => s.id === styleId)) {
+    return { error: "Unknown base map." };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("projects")
+    .update({ base_map_style: styleId })
+    .eq("id", projectId);
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  // Deliberately no revalidatePath: the editor already shows the new base map,
+  // and re-rendering the whole page under someone mid-edit to confirm what
+  // they just did would cost more than it tells them.
   return { success: true };
 }
 
