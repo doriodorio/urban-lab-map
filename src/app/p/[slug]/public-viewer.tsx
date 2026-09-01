@@ -2,6 +2,14 @@
 
 import { useEffect, useRef, useState } from "react";
 import {
+  MAP_STYLES,
+  DEFAULT_STYLE_ID,
+  findStyle,
+  buildRasterStyle,
+  initialStyle,
+  ensureRtlTextSupport,
+} from "@/lib/base-maps";
+import {
   MarginLabels,
   useMarginLabels,
   galleryImage,
@@ -38,19 +46,6 @@ type ThreadItem = {
 
 const UNASSIGNED_COLOR = "#737373";
 const DEFAULT_CENTER: [number, number] = [34.78, 32.07];
-
-const BASE_STYLE: maplibregl.StyleSpecification = {
-  version: 8,
-  sources: {
-    base: {
-      type: "raster",
-      tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
-      tileSize: 256,
-      attribution: "&copy; OpenStreetMap contributors",
-    },
-  },
-  layers: [{ id: "base", type: "raster", source: "base" }],
-};
 
 // Apple's projection from the Designing Fluid Interfaces sample code: where a
 // flick would come to rest, given its release velocity. Deliberately the
@@ -166,6 +161,11 @@ export function PublicViewer({
   // matching the editor, where searching is what makes a dense map readable.
   const [query, setQuery] = useState("");
   const [galleryOn, setGalleryOn] = useState(false);
+  const [mapStyleId, setMapStyleId] = useState(DEFAULT_STYLE_ID);
+  // Bumped whenever setStyle() replaces the whole style, which discards every
+  // source and layer we added - the shape layers and the base-map overlay have
+  // to be rebuilt against the new one.
+  const [styleEpoch, setStyleEpoch] = useState(0);
 
   const itemById = new Map(items.map((i) => [i.id, i]));
   const steps = threadItems
@@ -217,10 +217,13 @@ export function PublicViewer({
   useEffect(() => {
     if (!mapContainer.current || mapRef.current) return;
     maplibregl.setWorkerUrl("/maplibre-gl-worker.mjs");
+    // Before the map exists: a vector style shapes Hebrew in the browser, and
+    // without this the first labels render backwards.
+    ensureRtlTextSupport();
 
     const map = new maplibregl.Map({
       container: mapContainer.current,
-      style: BASE_STYLE,
+      style: initialStyle(DEFAULT_STYLE_ID),
       center: DEFAULT_CENTER,
       zoom: 12,
     });
@@ -269,7 +272,26 @@ export function PublicViewer({
 
     if (map.isStyleLoaded()) apply();
     else map.once("load", apply);
-  }, [project.base_map_image_url, project.base_map_bounds]);
+  }, [project.base_map_image_url, project.base_map_bounds, styleEpoch]);
+
+  // Base-map switching. A vector style is a whole style document, so it needs
+  // a full setStyle() and everything we added has to be rebuilt afterwards -
+  // hence styleEpoch, which the effects below depend on.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const style = findStyle(mapStyleId);
+
+    const apply = () => {
+      map.setStyle(
+        style.kind === "vector" ? style.url : buildRasterStyle(style)
+      );
+      map.once("idle", () => setStyleEpoch((e) => e + 1));
+    };
+
+    if (map.isStyleLoaded()) apply();
+    else map.once("load", apply);
+  }, [mapStyleId]);
 
   // Point markers.
   useEffect(() => {
@@ -352,7 +374,7 @@ export function PublicViewer({
     if (map.isStyleLoaded()) update();
     else map.once("load", update);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items, hiddenLayerIds, query, mode, layers]);
+  }, [items, hiddenLayerIds, query, mode, layers, styleEpoch]);
 
   // Fly to the current tour stop.
   useEffect(() => {
@@ -450,6 +472,19 @@ export function PublicViewer({
             }}
           />
         )}
+
+        <select
+          value={mapStyleId}
+          onChange={(e) => setMapStyleId(e.target.value)}
+          aria-label="Base map"
+          className="absolute right-24 top-3 z-10 rounded-md border border-rule bg-card px-2 py-1.5 text-[12px] outline-none"
+        >
+          {MAP_STYLES.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.label}
+            </option>
+          ))}
+        </select>
 
         <button
           type="button"
