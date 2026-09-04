@@ -132,14 +132,17 @@ export function ensurePerimeterLayers(map: maplibregl.Map) {
     filter: ["==", ["geometry-type"], "Point"],
     layout: {
       "text-field": ["get", "name"],
-      // The one font the OpenFreeMap glyph server carries across Latin and
-      // Hebrew, which is what these project names are written in.
-      "text-font": ["Noto Sans Regular"],
-      "text-size": 12,
-      "text-letter-spacing": 0.08,
+      // Bold, and the OpenFreeMap glyph server carries it across Latin and
+      // Hebrew - which is what these project names are written in. A regular
+      // weight at this size disappeared into the street names underneath.
+      "text-font": ["Noto Sans Bold"],
+      "text-size": 14,
+      "text-letter-spacing": 0.1,
       "text-transform": "uppercase",
       "text-anchor": "bottom",
-      "text-offset": [0, -0.4],
+      // Clear of the dashed edge, so the rule does not run through the
+      // letters.
+      "text-offset": [0, -0.6],
       // The name belongs to the box even where boxes overlap, which is the
       // normal case on a map of several projects.
       "text-allow-overlap": true,
@@ -150,7 +153,9 @@ export function ensurePerimeterLayers(map: maplibregl.Map) {
       // A halo rather than a plate: the name has to stay legible over
       // satellite imagery as well as paper-coloured streets.
       "text-halo-color": "#f8f9fa",
-      "text-halo-width": 1.5,
+      // Wide enough to punch the name out of whatever it lands on - street
+      // labels, satellite imagery, a dense city centre.
+      "text-halo-width": 2.2,
     },
   });
 }
