@@ -993,9 +993,10 @@ function ExplorePanel({
   onSelect: (item: Item) => void;
 }) {
   // Titles or pictures. A list is the way to find a known item; a grid is the
-  // way to see what kind of material a group actually gathered, which is the
-  // question this stage exists to answer - so both, and the reader picks.
-  const [view, setView] = useState<"list" | "grid">("list");
+  // way to see what kind of material a group actually gathered - and that is
+  // the question a visitor arrives with, so pictures lead and the list is
+  // there for anyone who already knows what they are after.
+  const [view, setView] = useState<"list" | "grid">("grid");
   const layerColor = (layerId: string | null) =>
     layers.find((l) => l.id === layerId)?.color || UNASSIGNED_COLOR;
 
