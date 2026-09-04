@@ -1,3 +1,5 @@
+import type * as maplibregl from "maplibre-gl";
+
 /**
  * The project perimeter: a rectangle enclosing everything the project has
  * placed, with a margin.
@@ -92,4 +94,93 @@ export function projectPerimeter(
     [w, n],
     [w, s],
   ];
+}
+
+/**
+ * Adds the perimeter's source and layers to a map, if they aren't there yet.
+ *
+ * Shared so the editor and the published view draw the same box the same way -
+ * and so the eventual map of many projects, where a reader sees nothing but
+ * perimeters and their names, inherits it rather than reinventing it.
+ */
+export function ensurePerimeterLayers(map: maplibregl.Map) {
+  if (map.getSource("project-perimeter")) return;
+
+  map.addSource("project-perimeter", {
+    type: "geojson",
+    data: { type: "FeatureCollection", features: [] },
+  });
+
+  map.addLayer({
+    id: "project-perimeter-line",
+    type: "line",
+    source: "project-perimeter",
+    filter: ["==", ["geometry-type"], "Polygon"],
+    paint: {
+      "line-color": "#23282d",
+      "line-width": 1.5,
+      // Dashed so it reads as an annotation over the map rather than as a
+      // feature of it - nothing on the ground marks this boundary.
+      "line-dasharray": [4, 3],
+    },
+  });
+
+  map.addLayer({
+    id: "project-perimeter-label",
+    type: "symbol",
+    source: "project-perimeter",
+    filter: ["==", ["geometry-type"], "Point"],
+    layout: {
+      "text-field": ["get", "name"],
+      // The one font the OpenFreeMap glyph server carries across Latin and
+      // Hebrew, which is what these project names are written in.
+      "text-font": ["Noto Sans Regular"],
+      "text-size": 12,
+      "text-letter-spacing": 0.08,
+      "text-transform": "uppercase",
+      "text-anchor": "bottom",
+      "text-offset": [0, -0.4],
+      // The name belongs to the box even where boxes overlap, which is the
+      // normal case on a map of several projects.
+      "text-allow-overlap": true,
+      "text-ignore-placement": true,
+    },
+    paint: {
+      "text-color": "#23282d",
+      // A halo rather than a plate: the name has to stay legible over
+      // satellite imagery as well as paper-coloured streets.
+      "text-halo-color": "#f8f9fa",
+      "text-halo-width": 1.5,
+    },
+  });
+}
+
+/**
+ * The perimeter as map data: the box itself, plus a point at the top edge
+ * carrying the project name.
+ */
+export function perimeterFeatures(ring: PerimeterRing | null, name: string) {
+  if (!ring) return { type: "FeatureCollection" as const, features: [] };
+
+  const [[west, , ], [east], [, north]] = [ring[0], ring[1], ring[2]];
+  return {
+    type: "FeatureCollection" as const,
+    features: [
+      {
+        type: "Feature" as const,
+        properties: {},
+        geometry: { type: "Polygon" as const, coordinates: [ring] },
+      },
+      {
+        type: "Feature" as const,
+        properties: { name },
+        // Centred on the top edge, so the name labels the box without sitting
+        // on top of the material inside it.
+        geometry: {
+          type: "Point" as const,
+          coordinates: [(west + east) / 2, north],
+        },
+      },
+    ],
+  };
 }

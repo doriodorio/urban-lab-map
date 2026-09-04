@@ -10,6 +10,11 @@ import {
 } from "@/lib/base-maps";
 import { ensureRtlTextSupport } from "@/lib/rtl-text";
 import {
+  projectPerimeter,
+  ensurePerimeterLayers,
+  perimeterFeatures,
+} from "@/lib/perimeter";
+import {
   MarginLabels,
   useMarginLabels,
   galleryImage,
@@ -79,6 +84,7 @@ function centroid(geometry: Geometry): [number, number] {
 }
 
 function ensureShapeLayers(map: maplibregl.Map) {
+  ensurePerimeterLayers(map);
   if (!map.getSource("item-lines")) {
     map.addSource("item-lines", {
       type: "geojson",
@@ -162,6 +168,9 @@ export function PublicViewer({
   // matching the editor, where searching is what makes a dense map readable.
   const [query, setQuery] = useState("");
   const [galleryOn, setGalleryOn] = useState(false);
+  // On by default: it tells a visitor what area this project covers before
+  // they have read a single item.
+  const [showPerimeter, setShowPerimeter] = useState(true);
   // Opens on the base map the project was arranged on. The picker stays, so a
   // reader can still switch - but the map they land on is the one the group
   // built.
@@ -207,6 +216,29 @@ export function PublicViewer({
   const exploreResults = items.filter(
     (i) => !hiddenLayerIds.has(i.layer_id ?? "unassigned") && matchesQuery(i)
   );
+
+  // Built from every item, not the filtered set: the perimeter is the extent
+  // of the project, and hiding a layer should not shrink the study area.
+  const perimeter = showPerimeter
+    ? projectPerimeter(items.map((i) => i.geometry))
+    : null;
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    const update = () => {
+      ensureShapeLayers(map);
+      const source = map.getSource(
+        "project-perimeter"
+      ) as maplibregl.GeoJSONSource | undefined;
+      source?.setData(perimeterFeatures(perimeter, project.name));
+    };
+
+    if (map.isStyleLoaded()) update();
+    else map.once("load", update);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [perimeter && perimeter.flat().join(","), project.name, styleEpoch]);
 
   // Gallery cards for whatever the map is currently showing. Built from the
   // same `visible` rule as the markers, so a card never points at a hidden
@@ -495,6 +527,17 @@ export function PublicViewer({
             </option>
           ))}
         </select>
+
+        <button
+          type="button"
+          onClick={() => setShowPerimeter((on) => !on)}
+          title="Outline the area this project covers"
+          className={`press absolute right-44 top-3 z-10 rounded-md border border-rule px-3 py-1.5 text-[12px] font-medium ${
+            showPerimeter ? "bg-ink text-white" : "bg-card text-ink"
+          }`}
+        >
+          Perimeter
+        </button>
 
         <button
           type="button"

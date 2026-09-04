@@ -80,6 +80,12 @@ export function buildRasterStyle(
   if (style.kind !== "raster") throw new Error("not a raster style");
   return {
     version: 8,
+    // Raster tiles carry their own labels as pixels, so a raster style would
+    // normally need no glyphs at all. These are here for the app's own text
+    // layers - the project perimeter's name - which render nothing without a
+    // glyph source. Includes Hebrew: the 1280-1535 block is what most of these
+    // project names live in.
+    glyphs: "https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf",
     sources: {
       base: {
         type: "raster",

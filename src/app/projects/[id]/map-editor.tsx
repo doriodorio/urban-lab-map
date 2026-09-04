@@ -7,7 +7,11 @@ import * as maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { preparePhoto } from "./photo-import";
 import { toVideoEmbed, linkHost } from "@/lib/embed";
-import { projectPerimeter } from "@/lib/perimeter";
+import {
+  projectPerimeter,
+  ensurePerimeterLayers,
+  perimeterFeatures,
+} from "@/lib/perimeter";
 import {
   MAP_STYLES,
   DEFAULT_STYLE_ID,
@@ -100,27 +104,9 @@ function ensureShapeLayers(map: maplibregl.Map) {
     });
   }
 
-  // Added before draw-preview but after the item layers, so the perimeter sits
-  // above the project's own shapes and below the line being drawn - the shape
-  // under the cursor should never be hidden by a frame.
-  if (!map.getSource("project-perimeter")) {
-    map.addSource("project-perimeter", {
-      type: "geojson",
-      data: { type: "FeatureCollection", features: [] },
-    });
-    map.addLayer({
-      id: "project-perimeter-line",
-      type: "line",
-      source: "project-perimeter",
-      paint: {
-        "line-color": "#23282d",
-        "line-width": 1.5,
-        // Dashed so it reads as an annotation over the map rather than as a
-        // feature of it - nothing on the ground marks this boundary.
-        "line-dasharray": [4, 3],
-      },
-    });
-  }
+  // Perimeter above the item shapes, below the draw preview: the shape under
+  // the cursor should never be hidden by a frame.
+  ensurePerimeterLayers(map);
 
   if (!map.getSource("draw-preview")) {
     map.addSource("draw-preview", {
@@ -857,24 +843,13 @@ export function MapEditor({
         "project-perimeter"
       ) as maplibregl.GeoJSONSource | undefined;
       if (!source) return;
-      source.setData({
-        type: "FeatureCollection",
-        features: perimeter
-          ? [
-              {
-                type: "Feature",
-                properties: {},
-                geometry: { type: "Polygon", coordinates: [perimeter] },
-              },
-            ]
-          : [],
-      });
+      source.setData(perimeterFeatures(perimeter, project.name));
     };
 
     if (map.isStyleLoaded()) update();
     else map.once("load", update);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [perimeter && perimeter.flat().join(","), styleEpoch]);
+  }, [perimeter && perimeter.flat().join(","), project.name, styleEpoch]);
 
   // Gallery cards, laid out by the shared hook so the published view and this
   // one cannot drift apart.
