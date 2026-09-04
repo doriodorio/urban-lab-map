@@ -44,6 +44,8 @@ export function galleryImage(
 export type GalleryEntry = {
   id: string;
   title: string;
+  /** Chooses the mark shown when there is no picture. */
+  type: string;
   image: string | null;
   color: string;
   lngLat: [number, number];
@@ -52,6 +54,7 @@ export type GalleryEntry = {
 export type LabelPlacement = {
   id: string;
   title: string;
+  type: string;
   image: string | null;
   color: string;
   side: "left" | "right";
@@ -167,6 +170,7 @@ export function useMarginLabels(
           sides[side].push({
             id: entry.id,
             title: entry.title,
+            type: entry.type,
             image: entry.image,
             color: entry.color,
             side,
@@ -208,6 +212,91 @@ export function useMarginLabels(
   }, [enabled, signature]);
 
   return labels;
+}
+
+/**
+ * The mark shown where an item has no picture.
+ *
+ * A smell or a sound cannot be photographed, so those items will *usually*
+ * have no picture - which makes this their normal appearance rather than a
+ * fallback, and a page-with-a-turned-corner the wrong thing to show. Each
+ * sense gets the organ that registers it; everything else keeps the document.
+ *
+ * All drawn on the same 24x24 grid in the same stroke weight, so a wall of
+ * tiles reads as one set rather than as clip art.
+ */
+export function ItemMark({
+  type,
+  color,
+  size = 20,
+}: {
+  type?: string;
+  color: string;
+  size?: number;
+}) {
+  const common = {
+    viewBox: "0 0 24 24",
+    width: size,
+    height: size,
+    fill: "none",
+    stroke: color,
+    strokeWidth: 1.75,
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+    "aria-hidden": true,
+  };
+
+  if (type === "sound") {
+    // An ear: the outer helix, and the inner fold inside it.
+    return (
+      <svg {...common}>
+        <path d="M6 10a6 6 0 0 1 12 0c0 2.5-1.5 3.6-2.8 4.6-1 .8-1.7 1.4-1.7 2.4a2.5 2.5 0 0 1-4.5 1.5" />
+        <path d="M10 10.2a2.4 2.4 0 0 1 4.8 0c0 1.2-.7 1.9-1.5 2.5" />
+      </svg>
+    );
+  }
+
+  if (type === "smell") {
+    // A nose in profile, filled, with scent reaching it.
+    //
+    // Drawn as a silhouette rather than an outline because a nose is a mass,
+    // not a line: stroked versions of this read as a comma at any size below
+    // about 40px. The two scent curves are what carry the meaning once the
+    // nose itself is down to a few pixels - side by side against outline
+    // versions, they were the difference between "smell" and "some hook".
+    return (
+      <svg {...common}>
+        <path
+          d="M14.2 5.5c.3 2.7 1 4.4 2.1 6.2.5.8.8 1.4.8 2 0 1.1-.8 1.7-2 1.7-.2 1.5-1.5 2.6-3.2 2.6-1.9 0-3.3-1.3-3.3-3 0-1.2.5-2.1 1.4-3.1 1.2-1.3 1.8-2.8 2-6.4z"
+          fill={color}
+          stroke="none"
+        />
+        <g strokeWidth={1.6}>
+          <path d="M4.6 8.6c1.5-1 1.5-2.7 0-3.7" />
+          <path d="M4.6 14.4c2.4-1.6 2.4-4.4 0-6" />
+        </g>
+      </svg>
+    );
+  }
+
+  if (type === "touch") {
+    // A fingerprint meeting a surface.
+    //
+    // The ridges alone read as an arch or a doorway; the line underneath is
+    // what turns them into a finger pressing something, which is the whole
+    // idea. Compared against a fingertip outline and against ridges with no
+    // surface - this was the only one that survived being 22px wide.
+    return (
+      <svg {...common}>
+        <path d="M6.5 12a5.5 5.5 0 0 1 11 0v2.5" />
+        <path d="M9.5 12.2a2.5 2.5 0 0 1 5 0v3" />
+        <path d="M12 11.8v5.6" />
+        <path d="M5 20.5h14" />
+      </svg>
+    );
+  }
+
+  return <DocumentMark color={color} size={size} />;
 }
 
 /**
@@ -305,7 +394,7 @@ export function MarginLabels({
                 background: `${l.color}1f`,
               }}
             >
-              <DocumentMark color={l.color} size={40} />
+              <ItemMark type={l.type} color={l.color} size={40} />
             </span>
           )}
           {/* The rule is the card's whole structure - it separates picture from

@@ -19,7 +19,7 @@ import {
   MarginLabels,
   useMarginLabels,
   galleryImage,
-  DocumentMark,
+  ItemMark,
   type GalleryEntry,
 } from "@/components/margin-labels";
 import * as maplibregl from "maplibre-gl";
@@ -271,6 +271,7 @@ export function PublicViewer({
   const galleryEntries: GalleryEntry[] = items.filter(visible).map((item) => ({
     id: item.id,
     title: item.title || "Untitled",
+    type: item.type,
     image: galleryImage(item.media),
     color: layerColor(item.layer_id),
     lngLat: centroid(item.geometry),
@@ -1124,7 +1125,7 @@ function ExplorePanel({
                               className="flex aspect-square w-full items-center justify-center"
                               style={{ background: `${color}1f` }}
                             >
-                              <DocumentMark color={color} size={22} />
+                              <ItemMark type={item.type} color={color} size={22} />
                             </span>
                           )}
                           <span

@@ -886,6 +886,7 @@ export function MapEditor({
   const galleryEntries: GalleryEntry[] = visibleItems.map((item) => ({
     id: item.id,
     title: item.title || "Untitled",
+    type: item.type,
     image: galleryImage(item.media),
     color: layerColor(item.layer_id),
     lngLat: centroid(item.geometry),
