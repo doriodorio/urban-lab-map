@@ -162,6 +162,12 @@ function isPosition(value: unknown): value is [number, number] {
   );
 }
 
+/** True when at least two of the positions differ - i.e. the shape has extent. */
+function hasDistinctPositions(positions: [number, number][]) {
+  const [firstLng, firstLat] = positions[0];
+  return positions.some(([lng, lat]) => lng !== firstLng || lat !== firstLat);
+}
+
 /**
  * Checks a geometry is actually one of the three shapes the map can draw.
  *
@@ -192,6 +198,12 @@ function parseGeometry(raw: string): ValidGeometry | null {
     const line = geometry.coordinates;
     if (!Array.isArray(line) || line.length < 2) return null;
     if (!line.every(isPosition)) return null;
+    // Two vertices at the same place is valid GeoJSON and draws nothing: no
+    // marker, because it is not a Point, and no line, because it has no
+    // length. The item then exists, counts, stretches the project perimeter,
+    // and cannot be seen or clicked on the map. One got into this project that
+    // way. A line needs at least two distinct points.
+    if (!hasDistinctPositions(line)) return null;
     return { type: "LineString", coordinates: line };
   }
 
@@ -205,6 +217,9 @@ function parseGeometry(raw: string): ValidGeometry | null {
       const first = ring[0];
       const last = ring[ring.length - 1];
       if (first[0] !== last[0] || first[1] !== last[1]) return null;
+      // Same trap as a zero-length line: a ring whose points coincide encloses
+      // nothing and renders as nothing.
+      if (!hasDistinctPositions(ring)) return null;
     }
     return { type: "Polygon", coordinates: rings };
   }
