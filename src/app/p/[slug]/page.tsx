@@ -11,6 +11,9 @@ type PublicProject = {
     base_map_image_url: string | null;
     base_map_bounds: [[number, number], [number, number]] | null;
     base_map_style: string | null;
+    statement: string | null;
+    cover_image_url: string | null;
+    doco_url: string | null;
     public_slug: string;
   };
   layers: { id: string; name: string; color: string | null }[];

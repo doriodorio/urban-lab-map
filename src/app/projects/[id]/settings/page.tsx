@@ -34,7 +34,7 @@ export default async function ProjectSettingsPage({
 
   const { data: project } = await supabase
     .from("projects")
-    .select("id, name, description, public_slug")
+    .select("id, name, description, public_slug, statement, cover_image_url, doco_url")
     .eq("id", id)
     .maybeSingle();
 
@@ -78,6 +78,9 @@ export default async function ProjectSettingsPage({
           action={updateProject.bind(null, project.id)}
           name={project.name}
           description={project.description}
+          statement={project.statement}
+          coverImageUrl={project.cover_image_url}
+          docoUrl={project.doco_url}
         />
       </section>
 

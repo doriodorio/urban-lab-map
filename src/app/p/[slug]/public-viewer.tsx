@@ -9,6 +9,7 @@ import {
   initialStyle,
 } from "@/lib/base-maps";
 import { ensureRtlTextSupport } from "@/lib/rtl-text";
+import { itemCategory, itemGroup, CATEGORIES } from "@/lib/categories";
 import {
   projectPerimeter,
   ensurePerimeterLayers,
@@ -42,6 +43,15 @@ type Item = {
   geometry: Geometry;
 };
 type Thread = { id: string; name: string; description: string | null };
+
+/**
+ * The stages a reader moves through, in order.
+ *
+ * Numbered, because the order is the argument: a visitor who lands on a map of
+ * coloured dots has to work out what they are looking at, and one who reads a
+ * statement first does not.
+ */
+type Stage = "statement" | "film" | "collection" | "tour";
 type ThreadItem = {
   thread_id: string;
   item_id: string;
@@ -131,6 +141,9 @@ export function PublicViewer({
     base_map_image_url: string | null;
     base_map_bounds: [[number, number], [number, number]] | null;
     base_map_style: string | null;
+    statement: string | null;
+    cover_image_url: string | null;
+    doco_url: string | null;
   };
   layers: Layer[];
   items: Item[];
@@ -144,6 +157,17 @@ export function PublicViewer({
   // The brief makes the guided tour the default entry point, so a project
   // with a thread opens in tour mode; one without has nothing to play.
   const firstThread = threads[0] ?? null;
+  // Yona's sequence: the argument for the project, then the film, then the
+  // material grouped by where it came from, and only then the tour. A project
+  // with no statement and no film starts at the collection, so nothing that
+  // exists today gains an empty opening.
+  const [stage, setStage] = useState<Stage>(
+    project.statement || project.cover_image_url
+      ? "statement"
+      : project.doco_url
+        ? "film"
+        : "collection"
+  );
   const [mode, setMode] = useState<"tour" | "explore">(
     firstThread ? "tour" : "explore"
   );
@@ -251,6 +275,18 @@ export function PublicViewer({
     lngLat: centroid(item.geometry),
   }));
   const labels = useMarginLabels(mapRef, galleryEntries, galleryOn);
+
+  // Only the stages this project actually has anything for.
+  const stages: { id: Stage; label: string }[] = [
+    ...(project.statement || project.cover_image_url
+      ? [{ id: "statement" as const, label: "Statement" }]
+      : []),
+    ...(project.doco_url ? [{ id: "film" as const, label: "Film" }] : []),
+    { id: "collection" as const, label: "Collection" },
+    ...(threads.length > 0
+      ? [{ id: "tour" as const, label: "Guided tour" }]
+      : []),
+  ];
 
   useEffect(() => {
     if (!mapContainer.current || mapRef.current) return;
@@ -563,22 +599,53 @@ export function PublicViewer({
       </div>
 
       <aside className="flex max-h-[48vh] w-full flex-col overflow-y-auto border-rule bg-card md:max-h-none md:w-96 md:border-l">
-        {threads.length > 0 && (
-          <div className="sticky top-0 z-10 flex border-b border-rule bg-card text-sm">
-            <ModeTab
-              label="Guided tour"
-              active={mode === "tour"}
-              onClick={() => setMode("tour")}
+        <nav className="sticky top-0 z-10 flex overflow-x-auto border-b border-rule bg-card">
+          {stages.map((s, i) => (
+            <StageTab
+              key={s.id}
+              index={i}
+              label={s.label}
+              active={stage === s.id}
+              onClick={() => {
+                setStage(s.id);
+                // The tour and the free map are the same surface underneath;
+                // which one the reader gets follows from the stage they chose.
+                if (s.id === "tour") setMode("tour");
+                if (s.id === "collection") setMode("explore");
+              }}
             />
-            <ModeTab
-              label="Explore"
-              active={mode === "explore"}
-              onClick={() => setMode("explore")}
-            />
-          </div>
+          ))}
+        </nav>
+
+        {stage === "statement" && (
+          <StatementPanel
+            name={project.name}
+            statement={project.statement}
+            coverImageUrl={project.cover_image_url}
+            onContinue={
+              stages[stages.findIndex((s) => s.id === "statement") + 1]
+            }
+            onGo={(id) => {
+              setStage(id);
+              if (id === "tour") setMode("tour");
+              if (id === "collection") setMode("explore");
+            }}
+          />
         )}
 
-        {mode === "tour" && (
+        {stage === "film" && (
+          <FilmPanel
+            url={project.doco_url!}
+            onContinue={stages[stages.findIndex((s) => s.id === "film") + 1]}
+            onGo={(id) => {
+              setStage(id);
+              if (id === "tour") setMode("tour");
+              if (id === "collection") setMode("explore");
+            }}
+          />
+        )}
+
+        {stage === "tour" && mode === "tour" && (
           <TourPanel
             threads={threads}
             threadId={threadId}
@@ -592,7 +659,7 @@ export function PublicViewer({
           />
         )}
 
-        {mode === "explore" && (
+        {stage === "collection" && (
           <ExplorePanel
             layers={layers}
             hiddenLayerIds={hiddenLayerIds}
@@ -694,11 +761,14 @@ function PublicEmbeddedLink({ url }: { url: string }) {
   );
 }
 
-function ModeTab({
+/** A numbered step in the sequence, in the catalog's own idiom. */
+function StageTab({
+  index,
   label,
   active,
   onClick,
 }: {
+  index: number;
   label: string;
   active: boolean;
   onClick: () => void;
@@ -706,20 +776,102 @@ function ModeTab({
   return (
     <button
       onClick={onClick}
-      className={`press relative flex-1 py-2.5 text-[13px] tracking-[0.01em] ${
-        active ? "font-semibold text-neutral-900" : "text-neutral-500"
+      className={`press relative shrink-0 px-4 py-3 text-left ${
+        active ? "text-ink" : "text-ink-muted hover:text-ink-secondary"
       }`}
     >
-      {label}
-      {/* The indicator sits under the active tab rather than a full-width
-          divider, so the chrome stays a floating layer. */}
+      <span className="code mr-1.5 tabular-nums">
+        {String(index).padStart(2, "0")}
+      </span>
+      <span className="text-[13px] font-medium">{label}</span>
       <span
-        aria-hidden
-        className={`absolute inset-x-4 bottom-0 h-0.5 rounded-full bg-neutral-900 transition-opacity duration-200 ${
+        className={`absolute inset-x-3 bottom-0 h-0.5 bg-ink transition-opacity ${
           active ? "opacity-100" : "opacity-0"
         }`}
       />
     </button>
+  );
+}
+
+/**
+ * The opening: what this project is, before any of it is shown.
+ *
+ * Paragraphs are split on blank lines rather than rendered as markdown - the
+ * field asks for up to two paragraphs of plain prose, and a full renderer
+ * would invite formatting nobody asked for.
+ */
+function StatementPanel({
+  name,
+  statement,
+  coverImageUrl,
+  onContinue,
+  onGo,
+}: {
+  name: string;
+  statement: string | null;
+  coverImageUrl: string | null;
+  onContinue?: { id: Stage; label: string };
+  onGo: (id: Stage) => void;
+}) {
+  const paragraphs = (statement ?? "")
+    .split(/\n\s*\n/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+
+  return (
+    <div className="flex flex-col gap-4 px-4 pb-6 pt-4">
+      <h1 className="display text-[26px] leading-[1.1]">{name}</h1>
+
+      {coverImageUrl && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={coverImageUrl}
+          alt=""
+          className="w-full rounded-md border border-rule object-cover"
+        />
+      )}
+
+      {paragraphs.map((paragraph, i) => (
+        <p key={i} className="text-[14px] leading-relaxed text-ink-secondary">
+          {paragraph}
+        </p>
+      ))}
+
+      {onContinue && (
+        <button
+          onClick={() => onGo(onContinue.id)}
+          className="press self-start rounded-md bg-ink px-4 py-1.5 text-[13px] font-medium text-white"
+        >
+          {onContinue.label} &rarr;
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** The one-minute film. */
+function FilmPanel({
+  url,
+  onContinue,
+  onGo,
+}: {
+  url: string;
+  onContinue?: { id: Stage; label: string };
+  onGo: (id: Stage) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-4 px-4 pb-6 pt-4">
+      <p className="label">One minute on this project</p>
+      <PublicEmbeddedLink url={url} />
+      {onContinue && (
+        <button
+          onClick={() => onGo(onContinue.id)}
+          className="press self-start rounded-md bg-ink px-4 py-1.5 text-[13px] font-medium text-white"
+        >
+          {onContinue.label} &rarr;
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -871,23 +1023,57 @@ function ExplorePanel({
         </div>
       )}
 
-      <div className="flex flex-col gap-1">
-        <p className="label">
-          {results.length} items
-        </p>
-        <ul className="-mx-2 flex max-h-64 flex-col overflow-y-auto">
-          {results.slice(0, 100).map((item) => (
-            <li key={item.id}>
-              <button
-                onClick={() => onSelect(item)}
-                className="press w-full truncate rounded-lg px-2 py-1.5 text-left text-[13px] text-neutral-800 hover:bg-neutral-900/[0.05]"
-              >
-                {item.title || "Untitled"}
-              </button>
-            </li>
-          ))}
-        </ul>
-      </div>
+      {/* Theory and field, each broken into the kinds of material inside it.
+          This is the answer to "what sort of work is this?", which a flat list
+          of titles never gave. */}
+      {CATEGORIES.map((category) => {
+        const inCategory = results.filter(
+          (item) => itemCategory(item) === category.id
+        );
+        if (inCategory.length === 0) return null;
+
+        const groups = new Map<string, Item[]>();
+        for (const item of inCategory) {
+          const key = itemGroup(item);
+          groups.set(key, [...(groups.get(key) ?? []), item]);
+        }
+
+        return (
+          <div key={category.id} className="flex flex-col gap-1.5">
+            <div className="flex items-baseline justify-between border-b border-rule pb-1">
+              <p className="label">{category.label}</p>
+              <span className="code tabular-nums">
+                {String(inCategory.length).padStart(2, "0")}
+              </span>
+            </div>
+            <p className="text-[11px] text-ink-muted">{category.blurb}</p>
+
+            {[...groups.entries()].map(([groupName, groupItems]) => (
+              <div key={groupName} className="flex flex-col">
+                <p className="mt-1.5 text-[11px] font-medium text-ink-secondary">
+                  {groupName} &middot; {groupItems.length}
+                </p>
+                <ul className="-mx-2 flex flex-col">
+                  {groupItems.map((item) => (
+                    <li key={item.id}>
+                      <button
+                        onClick={() => onSelect(item)}
+                        className="press w-full truncate rounded-lg px-2 py-1.5 text-left text-[13px] text-neutral-800 hover:bg-neutral-900/[0.05]"
+                      >
+                        {item.title || "Untitled"}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        );
+      })}
+
+      {results.length === 0 && (
+        <p className="text-[13px] text-ink-muted">Nothing matches.</p>
+      )}
     </div>
   );
 }

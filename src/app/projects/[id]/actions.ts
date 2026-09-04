@@ -13,15 +13,43 @@ export async function updateProject(
 ): Promise<ActionResult> {
   const name = (formData.get("name") as string)?.trim();
   const description = (formData.get("description") as string)?.trim() || null;
+  // The opening the public view leads with.
+  const statement = (formData.get("statement") as string)?.trim() || null;
+  const coverImageUrl =
+    (formData.get("cover_image_url") as string)?.trim() || null;
+  const docoUrl = (formData.get("doco_url") as string)?.trim() || null;
 
   if (!name) {
     return { error: "Name is required." };
+  }
+  // Both are put straight into the page - the cover as an <img> src, the film
+  // through the embed parser - so anything that is not an http(s) URL is
+  // refused here rather than trusted from the form.
+  for (const [label, value] of [
+    ["cover image", coverImageUrl],
+    ["film link", docoUrl],
+  ] as const) {
+    if (!value) continue;
+    try {
+      const parsed = new URL(value);
+      if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+        throw new Error("bad protocol");
+      }
+    } catch {
+      return { error: `The ${label} must be a link starting http:// or https://` };
+    }
   }
 
   const supabase = await createClient();
   const { error } = await supabase
     .from("projects")
-    .update({ name, description })
+    .update({
+      name,
+      description,
+      statement,
+      cover_image_url: coverImageUrl,
+      doco_url: docoUrl,
+    })
     .eq("id", projectId);
 
   if (error) {

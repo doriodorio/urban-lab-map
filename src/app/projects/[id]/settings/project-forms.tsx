@@ -14,10 +14,16 @@ export function EditProjectForm({
   action,
   name,
   description,
+  statement,
+  coverImageUrl,
+  docoUrl,
 }: {
   action: BoundAction;
   name: string;
   description: string | null;
+  statement: string | null;
+  coverImageUrl: string | null;
+  docoUrl: string | null;
 }) {
   const [state, formAction, pending] = useActionState(action, initialState);
 
@@ -47,6 +53,64 @@ export function EditProjectForm({
           className="rounded-md border border-rule bg-card px-3 py-2 text-sm outline-none focus:border-neutral-400"
         />
       </div>
+      <div className="flex flex-col gap-3 border-t border-rule pt-3">
+        <p className="label">The opening</p>
+        <p className="text-[13px] text-ink-secondary">
+          What a visitor meets before the map: a statement, a picture, and a
+          one-minute film. Leave them empty and the published view opens
+          straight onto the map.
+        </p>
+
+        <div className="flex flex-col gap-1">
+          <label htmlFor="statement" className="text-sm font-medium">
+            Statement
+          </label>
+          <textarea
+            id="statement"
+            name="statement"
+            defaultValue={statement ?? ""}
+            rows={6}
+            placeholder="Up to two paragraphs. Leave a blank line between them."
+            className="rounded-md border border-rule bg-card px-3 py-2 text-sm outline-none focus:border-neutral-400"
+          />
+        </div>
+
+        <div className="flex flex-col gap-1">
+          <label htmlFor="cover_image_url" className="text-sm font-medium">
+            Opening image
+          </label>
+          <input
+            id="cover_image_url"
+            name="cover_image_url"
+            type="url"
+            defaultValue={coverImageUrl ?? ""}
+            placeholder="https://…"
+            className="rounded-md border border-rule bg-card px-3 py-2 text-sm outline-none focus:border-neutral-400"
+          />
+          <span className="text-[11px] text-ink-muted">
+            Paste the address of an image already in this project, or any
+            public image URL.
+          </span>
+        </div>
+
+        <div className="flex flex-col gap-1">
+          <label htmlFor="doco_url" className="text-sm font-medium">
+            One-minute film
+          </label>
+          <input
+            id="doco_url"
+            name="doco_url"
+            type="url"
+            defaultValue={docoUrl ?? ""}
+            placeholder="https://youtube.com/watch?v=…"
+            className="rounded-md border border-rule bg-card px-3 py-2 text-sm outline-none focus:border-neutral-400"
+          />
+          <span className="text-[11px] text-ink-muted">
+            YouTube or Vimeo plays in place. Anything else becomes a link.
+          </span>
+        </div>
+      </div>
+
       <div className="flex items-center gap-3">
         <button
           type="submit"
