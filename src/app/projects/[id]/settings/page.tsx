@@ -32,11 +32,20 @@ export default async function ProjectSettingsPage({
     redirect("/login");
   }
 
-  const { data: project } = await supabase
+  const { data: project, error: projectError } = await supabase
     .from("projects")
     .select("id, name, description, public_slug, statement, cover_image_url, doco_url")
     .eq("id", id)
     .maybeSingle();
+
+  // Same reason as the editor page: a failed query is not a missing project,
+  // and reporting it as one sends you looking for a deleted row when a
+  // migration is what is actually missing.
+  if (projectError) {
+    throw new Error(
+      `Couldn't load this project: ${projectError.message}. If this names a column, a migration in supabase/ still needs running.`
+    );
+  }
 
   if (!project) {
     notFound();

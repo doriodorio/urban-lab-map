@@ -19,6 +19,7 @@ import {
   MarginLabels,
   useMarginLabels,
   galleryImage,
+  DocumentMark,
   type GalleryEntry,
 } from "@/components/margin-labels";
 import * as maplibregl from "maplibre-gl";
@@ -987,6 +988,13 @@ function ExplorePanel({
   results: Item[];
   onSelect: (item: Item) => void;
 }) {
+  // Titles or pictures. A list is the way to find a known item; a grid is the
+  // way to see what kind of material a group actually gathered, which is the
+  // question this stage exists to answer - so both, and the reader picks.
+  const [view, setView] = useState<"list" | "grid">("list");
+  const layerColor = (layerId: string | null) =>
+    layers.find((l) => l.id === layerId)?.color || UNASSIGNED_COLOR;
+
   return (
     <div className="flex flex-col gap-4 px-4 pb-4 pt-3.5">
       <input
@@ -1023,6 +1031,24 @@ function ExplorePanel({
         </div>
       )}
 
+      <div className="flex items-center justify-between border-b border-rule pb-1.5">
+        <p className="label">{results.length} items</p>
+        <div className="flex gap-1">
+          {(["list", "grid"] as const).map((option) => (
+            <button
+              key={option}
+              type="button"
+              onClick={() => setView(option)}
+              className={`press label rounded px-2 py-0.5 ${
+                view === option ? "bg-ink text-white" : "hover:text-ink"
+              }`}
+            >
+              {option === "list" ? "List" : "Preview"}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* Theory and field, each broken into the kinds of material inside it.
           This is the answer to "what sort of work is this?", which a flat list
           of titles never gave. */}
@@ -1053,18 +1079,61 @@ function ExplorePanel({
                 <p className="mt-1.5 text-[11px] font-medium text-ink-secondary">
                   {groupName} &middot; {groupItems.length}
                 </p>
-                <ul className="-mx-2 flex flex-col">
-                  {groupItems.map((item) => (
-                    <li key={item.id}>
-                      <button
-                        onClick={() => onSelect(item)}
-                        className="press w-full truncate rounded-lg px-2 py-1.5 text-left text-[13px] text-neutral-800 hover:bg-neutral-900/[0.05]"
-                      >
-                        {item.title || "Untitled"}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
+                {view === "list" ? (
+                  <ul className="-mx-2 flex flex-col">
+                    {groupItems.map((item) => (
+                      <li key={item.id}>
+                        <button
+                          onClick={() => onSelect(item)}
+                          className="press w-full truncate rounded-lg px-2 py-1.5 text-left text-[13px] text-neutral-800 hover:bg-neutral-900/[0.05]"
+                        >
+                          {item.title || "Untitled"}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <div className="mt-1 grid grid-cols-3 gap-2">
+                    {groupItems.map((item) => {
+                      const image = galleryImage(item.media);
+                      const color = layerColor(item.layer_id);
+                      return (
+                        <button
+                          key={item.id}
+                          onClick={() => onSelect(item)}
+                          title={item.title || "Untitled"}
+                          className="press flex flex-col overflow-hidden border border-ink/50 bg-card text-left"
+                        >
+                          {/* Same plate as the map's gallery card - picture,
+                              rule, caption - so an item looks the same object
+                              wherever it is met. */}
+                          {image ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={image}
+                              alt=""
+                              className="aspect-square w-full object-cover"
+                            />
+                          ) : (
+                            <span
+                              className="flex aspect-square w-full items-center justify-center"
+                              style={{ background: `${color}1f` }}
+                            >
+                              <DocumentMark color={color} size={22} />
+                            </span>
+                          )}
+                          <span
+                            className="block w-full shrink-0"
+                            style={{ height: 2, background: "rgba(0,0,0,0.8)" }}
+                          />
+                          <span className="truncate px-1 py-1 text-[10px] font-medium leading-none text-ink">
+                            {item.title || "Untitled"}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             ))}
           </div>
