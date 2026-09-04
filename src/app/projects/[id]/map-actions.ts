@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { MAP_STYLES } from "@/lib/base-maps";
+import { CATEGORIES } from "@/lib/categories";
 
 type ActionResult = { error?: string; success?: boolean };
 
@@ -493,6 +494,36 @@ export async function updateItemUrl(
       updated_at: new Date().toISOString(),
     })
     .eq("id", itemId);
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  revalidatePath(`/projects/${projectId}`);
+  return { success: true };
+}
+
+/**
+ * Move an item between theory and field, or hand it back to the guess.
+ *
+ * Null means "work it out from the type", which is the state every item starts
+ * in - so clearing an override is a real operation, not a deletion.
+ */
+export async function updateItemCategory(
+  projectId: string,
+  itemId: string,
+  category: string | null
+): Promise<ActionResult> {
+  if (category !== null && !CATEGORIES.some((c) => c.id === category)) {
+    return { error: "Unknown category." };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("items")
+    .update({ category })
+    .eq("id", itemId)
+    .eq("project_id", projectId);
 
   if (error) {
     return { error: error.message };

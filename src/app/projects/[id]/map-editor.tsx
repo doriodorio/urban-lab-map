@@ -8,6 +8,11 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import { preparePhoto } from "./photo-import";
 import { toVideoEmbed, linkHost } from "@/lib/embed";
 import {
+  CATEGORIES,
+  defaultCategory,
+  itemCategory,
+} from "@/lib/categories";
+import {
   projectPerimeter,
   ensurePerimeterLayers,
   perimeterFeatures,
@@ -44,6 +49,8 @@ type Item = {
   media: { url: string; type: string }[] | null;
   geometry: Geometry;
   created_by: string | null;
+  /** null means "take it from the type" - see lib/categories. */
+  category: string | null;
 };
 type Project = {
   id: string;
@@ -307,6 +314,7 @@ export function MapEditor({
   purgeItemAction,
   updateItemLayerAction,
   updateItemUrlAction,
+  updateItemCategoryAction,
   updateItemTagsAction,
   updateItemGeometryAction,
   createItemLinkAction,
@@ -338,6 +346,10 @@ export function MapEditor({
     layerId: string | null
   ) => Promise<ActionResult>;
   updateItemUrlAction: (itemId: string, url: string) => Promise<ActionResult>;
+  updateItemCategoryAction: (
+    itemId: string,
+    category: string | null
+  ) => Promise<ActionResult>;
   updateItemTagsAction: (
     itemId: string,
     tags: string[]
@@ -1236,6 +1248,7 @@ export function MapEditor({
             deleteItemAction={deleteItemAction}
             updateItemLayerAction={updateItemLayerAction}
             updateItemUrlAction={updateItemUrlAction}
+            updateItemCategoryAction={updateItemCategoryAction}
             currentUserId={currentUserId}
             updateItemTagsAction={updateItemTagsAction}
             createItemLinkAction={createItemLinkAction}
@@ -2434,6 +2447,7 @@ function ItemDetail({
   deleteItemAction,
   updateItemLayerAction,
   updateItemUrlAction,
+  updateItemCategoryAction,
   updateItemTagsAction,
   createItemLinkAction,
   deleteItemLinkAction,
@@ -2455,6 +2469,10 @@ function ItemDetail({
     layerId: string | null
   ) => Promise<ActionResult>;
   updateItemUrlAction: (itemId: string, url: string) => Promise<ActionResult>;
+  updateItemCategoryAction: (
+    itemId: string,
+    category: string | null
+  ) => Promise<ActionResult>;
   updateItemTagsAction: (
     itemId: string,
     tags: string[]
@@ -2470,6 +2488,10 @@ function ItemDetail({
 }) {
   const [layerId, setLayerId] = useState(item.layer_id ?? "");
   const [savingLayer, setSavingLayer] = useState(false);
+  // "" is the automatic setting - the guess from the item's type. It is a real
+  // choice a reader can return to, not the absence of one.
+  const [category, setCategory] = useState(item.category ?? "");
+  const [savingCategory, setSavingCategory] = useState(false);
   const [tagsInput, setTagsInput] = useState((item.tags ?? []).join(", "));
   const [linkTarget, setLinkTarget] = useState("");
   const [linkQuery, setLinkQuery] = useState("");
@@ -2548,9 +2570,44 @@ function ItemDetail({
         </button>
       </div>
 
-      <span className="w-fit rounded-full bg-neutral-900/[0.06] px-2 py-0.5 text-[11px] text-neutral-600">
-        {TYPE_OPTIONS.find((t) => t.value === item.type)?.label ?? item.type}
-      </span>
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="w-fit rounded-full bg-neutral-900/[0.06] px-2 py-0.5 text-[11px] text-neutral-600">
+          {TYPE_OPTIONS.find((t) => t.value === item.type)?.label ?? item.type}
+        </span>
+
+        {/* Theory or field - which section of the published collection this
+            lands in. Automatic reads the item's type; the named options
+            overrule it, for the cases the type gets wrong. */}
+        <select
+          value={category}
+          disabled={savingCategory}
+          aria-label="Category"
+          onChange={async (e) => {
+            const next = e.target.value;
+            setCategory(next);
+            setSavingCategory(true);
+            await updateItemCategoryAction(item.id, next === "" ? null : next);
+            setSavingCategory(false);
+          }}
+          className="label rounded-lg border border-rule bg-card px-2 py-0.5 outline-none focus:border-neutral-400"
+        >
+          <option value="">
+            Auto &middot;{" "}
+            {CATEGORIES.find((c) => c.id === defaultCategory(item.type))?.label}
+          </option>
+          {CATEGORIES.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.label}
+            </option>
+          ))}
+        </select>
+
+        {item.category && (
+          <span className="text-[11px] text-ink-muted">
+            set by hand &mdash; now {itemCategory(item)}
+          </span>
+        )}
+      </div>
 
       <h3 className="display text-[18px] leading-[1.15]">
         {item.title}

@@ -12,6 +12,7 @@ import {
   restoreItem,
   purgeItem,
   updateItemLayer,
+  updateItemCategory,
   updateItemUrl,
   updateItemTags,
   updateItemGeometry,
@@ -56,7 +57,7 @@ export default async function ProjectMapPage({
   }
 
   const itemColumns =
-    "id, layer_id, type, title, body, attribution, tags, date_start, media, geometry, created_by";
+    "id, layer_id, type, title, body, attribution, tags, date_start, media, geometry, created_by, category";
 
   const [layersResult, itemsResult, deletedItemsResult] = await Promise.all([
     supabase
@@ -164,6 +165,7 @@ export default async function ProjectMapPage({
       restoreItemAction={restoreItem.bind(null, project.id)}
       purgeItemAction={purgeItem.bind(null, project.id)}
       updateItemLayerAction={updateItemLayer.bind(null, project.id)}
+      updateItemCategoryAction={updateItemCategory.bind(null, project.id)}
       updateItemUrlAction={updateItemUrl.bind(null, project.id)}
       updateItemTagsAction={updateItemTags.bind(null, project.id)}
       updateItemGeometryAction={updateItemGeometry.bind(null, project.id)}
