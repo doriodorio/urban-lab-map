@@ -7,6 +7,7 @@ import * as maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { preparePhoto } from "./photo-import";
 import { toVideoEmbed, linkHost } from "@/lib/embed";
+import { projectPerimeter } from "@/lib/perimeter";
 import {
   MAP_STYLES,
   DEFAULT_STYLE_ID,
@@ -96,6 +97,28 @@ function ensureShapeLayers(map: maplibregl.Map) {
       type: "line",
       source: "item-polygons",
       paint: { "line-color": ["get", "color"], "line-width": 2 },
+    });
+  }
+
+  // Added before draw-preview but after the item layers, so the perimeter sits
+  // above the project's own shapes and below the line being drawn - the shape
+  // under the cursor should never be hidden by a frame.
+  if (!map.getSource("project-perimeter")) {
+    map.addSource("project-perimeter", {
+      type: "geojson",
+      data: { type: "FeatureCollection", features: [] },
+    });
+    map.addLayer({
+      id: "project-perimeter-line",
+      type: "line",
+      source: "project-perimeter",
+      paint: {
+        "line-color": "#23282d",
+        "line-width": 1.5,
+        // Dashed so it reads as an annotation over the map rather than as a
+        // feature of it - nothing on the ground marks this boundary.
+        "line-dasharray": [4, 3],
+      },
     });
   }
 
@@ -395,6 +418,9 @@ export function MapEditor({
   // margins with leader lines, so the map reads as an annotated plate rather
   // than a set of pins you have to click one at a time.
   const [previewMode, setPreviewMode] = useState(false);
+  // On by default: the perimeter is the project's own extent, and a group that
+  // has just defined it should see it without going looking for a switch.
+  const [showPerimeter, setShowPerimeter] = useState(true);
   // Bumped whenever setStyle() replaces the whole style, which discards every
   // source and layer we added. Effects that build our own layers depend on it
   // so they re-run and put everything back.
@@ -814,6 +840,42 @@ export function MapEditor({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items, hiddenLayerIds, activeTags, dateFrom, dateTo, query, layers, selectedItemId, previewMode]);
 
+  // The project perimeter, drawn from every item rather than the filtered set:
+  // it is the extent of the project, not of whatever the filters leave showing.
+  // Hiding a layer should not shrink the study area.
+  const perimeter = showPerimeter
+    ? projectPerimeter(items.map((i) => i.geometry))
+    : null;
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    const update = () => {
+      ensureShapeLayers(map);
+      const source = map.getSource(
+        "project-perimeter"
+      ) as maplibregl.GeoJSONSource | undefined;
+      if (!source) return;
+      source.setData({
+        type: "FeatureCollection",
+        features: perimeter
+          ? [
+              {
+                type: "Feature",
+                properties: {},
+                geometry: { type: "Polygon", coordinates: [perimeter] },
+              },
+            ]
+          : [],
+      });
+    };
+
+    if (map.isStyleLoaded()) update();
+    else map.once("load", update);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [perimeter && perimeter.flat().join(","), styleEpoch]);
+
   // Gallery cards, laid out by the shared hook so the published view and this
   // one cannot drift apart.
   const galleryEntries: GalleryEntry[] = visibleItems.map((item) => ({
@@ -1125,6 +1187,9 @@ export function MapEditor({
             deleteLayerAction={deleteLayerAction}
             updateLayerAction={updateLayerAction}
             items={items}
+            showPerimeter={showPerimeter}
+            onTogglePerimeter={() => setShowPerimeter((on) => !on)}
+            hasPerimeter={Boolean(projectPerimeter(items.map((i) => i.geometry)))}
           />
         )}
 
@@ -1299,6 +1364,9 @@ function LayerEditRow({
 function LayerPanel({
   layers,
   items,
+  showPerimeter,
+  onTogglePerimeter,
+  hasPerimeter,
   hiddenLayerIds,
   onToggle,
   createLayerAction,
@@ -1307,6 +1375,9 @@ function LayerPanel({
 }: {
   layers: Layer[];
   items: Item[];
+  showPerimeter: boolean;
+  onTogglePerimeter: () => void;
+  hasPerimeter: boolean;
   hiddenLayerIds: Set<string>;
   onToggle: (id: string) => void;
   createLayerAction: BoundAction;
@@ -1330,6 +1401,31 @@ function LayerPanel({
 
   return (
     <div className="flex flex-col gap-3 p-4">
+      <div className="-mx-2 border-b border-rule pb-2">
+        <label className="flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-[13px] hover:bg-neutral-900/[0.04]">
+          <input
+            type="checkbox"
+            checked={showPerimeter}
+            onChange={onTogglePerimeter}
+            disabled={!hasPerimeter}
+            className="accent-neutral-900"
+          />
+          {/* A dashed swatch, matching how it is drawn, rather than the solid
+              dot a real layer gets - it is an annotation, not content. */}
+          <span
+            className="h-2.5 w-2.5 shrink-0 rounded-[2px] border border-dashed border-ink"
+            aria-hidden="true"
+          />
+          <span className="flex-1 truncate">Project perimeter</span>
+          <span className="code shrink-0">PRM</span>
+        </label>
+        <p className="px-2 text-[11px] text-ink-muted">
+          {hasPerimeter
+            ? "A box around everything placed, with a 10% margin. Follows the items."
+            : "Appears once the project has its first item."}
+        </p>
+      </div>
+
       <ul className="-mx-2 flex flex-col">
         {layers.map((layer) =>
           editingId === layer.id ? (
