@@ -678,7 +678,11 @@ export function PublicViewer({
           />
         )}
 
-        {selectedItem && (
+        {/* Only where an item is what the reader is looking at. During the
+            statement and the film, a leftover selection - the tour's first
+            stop, chosen before anyone asked for it - would sit under the
+            opening as if it were part of it. */}
+        {selectedItem && (stage === "collection" || stage === "tour") && (
           <div
             // The card tracks the finger 1:1 during a swipe, then settles.
             // Transition is off mid-gesture so the content stays glued to the
