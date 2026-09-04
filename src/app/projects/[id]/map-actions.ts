@@ -134,6 +134,9 @@ async function uploadFile(
 const VALID_TYPES = [
   "image",
   "text",
+  "sound",
+  "smell",
+  "touch",
   "quote",
   "interview",
   "document",

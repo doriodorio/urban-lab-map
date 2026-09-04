@@ -38,6 +38,10 @@ export function defaultCategory(type: string): Category {
     case "video":
     case "data":
     case "composite":
+    // The senses are only recorded by being there.
+    case "sound":
+    case "smell":
+    case "touch":
       return "field";
     default:
       return "theory";
@@ -66,6 +70,17 @@ export function itemGroup(item: {
   type: string;
   media?: { url: string; type: string }[] | null;
 }): string {
+  // Type first: a sound item carries audio, and calling it Voice would put a
+  // recording of traffic in with the interviews.
+  switch (item.type) {
+    case "sound":
+      return "Sound";
+    case "smell":
+      return "Smell";
+    case "touch":
+      return "Touch & material";
+  }
+
   if (item.media?.some((m) => m.type === "audio")) return "Voice";
 
   switch (item.type) {

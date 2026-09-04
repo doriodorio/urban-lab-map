@@ -141,6 +141,13 @@ const TYPE_OPTIONS: { value: string; label: string; bodyLabel: string }[] = [
   { value: "document", label: "Document / Citation", bodyLabel: "Description" },
   { value: "data", label: "Data", bodyLabel: "A stat, number, or short data note" },
   { value: "image", label: "Image", bodyLabel: "Caption" },
+  // The senses a street is recorded through besides looking. Kept as separate
+  // types rather than tags because they behave differently: sound carries a
+  // recording, smell and touch are described in words and can only be
+  // photographed at second hand.
+  { value: "sound", label: "Sound", bodyLabel: "What is heard here" },
+  { value: "smell", label: "Smell", bodyLabel: "What it smells of, and when" },
+  { value: "touch", label: "Touch / Material", bodyLabel: "Surface, texture, temperature" },
   { value: "link", label: "Web link", bodyLabel: "What's at this link, and why it matters" },
   { value: "video", label: "Video", bodyLabel: "Notes on the video" },
   { value: "composite", label: "Composite (mixed)", bodyLabel: "Notes" },
@@ -150,7 +157,18 @@ const TYPE_OPTIONS: { value: string; label: string; bodyLabel: string }[] = [
 const URL_FIRST_TYPES = new Set(["link", "video"]);
 
 /** Types where a picture illustrates the item rather than being the item. */
-const COVER_IMAGE_TYPES = new Set(["text", "document"]);
+const COVER_IMAGE_TYPES = new Set([
+  "text",
+  "document",
+  // A sensory item is words plus, at best, a picture of whatever produced the
+  // smell or the surface - the photograph illustrates it rather than being it.
+  "sound",
+  "smell",
+  "touch",
+]);
+
+/** Types whose substance is a recording. */
+const AUDIO_TYPES = new Set(["sound"]);
 
 function bodyLabelFor(type: string) {
   return TYPE_OPTIONS.find((t) => t.value === type)?.bodyLabel ?? "Notes";
@@ -2255,6 +2273,7 @@ function NewItemForm({
   const urlFirst = URL_FIRST_TYPES.has(type);
   const showMedia =
     type === "interview" || type === "document" || type === "composite";
+  const showAudio = AUDIO_TYPES.has(type);
   const showAttribution = type !== "text" && type !== "data";
 
   return (
@@ -2369,6 +2388,22 @@ function NewItemForm({
             className="rounded-lg border border-rule bg-card px-2.5 py-1.5 text-[13px] outline-none focus:border-neutral-400"
           />
         </>
+      )}
+
+      {showAudio && (
+        <label className="flex flex-col gap-1 text-xs text-neutral-500">
+          Recording
+          <input
+            type="file"
+            name="media_file"
+            accept="audio/*"
+            className="text-sm"
+          />
+          <span className="text-[11px] text-neutral-400">
+            The sound itself. Describe it above as well &mdash; a recording
+            without words is hard to search and impossible to skim.
+          </span>
+        </label>
       )}
 
       {showImage && (
