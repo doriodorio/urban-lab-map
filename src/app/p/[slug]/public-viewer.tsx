@@ -42,6 +42,8 @@ type Item = {
   date_start: string | null;
   media: { url: string; type: string }[] | null;
   geometry: Geometry;
+  /** "photo" when the point came off the photograph's own GPS. */
+  located_by: string | null;
 };
 type Thread = { id: string; name: string; description: string | null };
 
@@ -429,9 +431,14 @@ export function PublicViewer({
       if (!marker) {
         const el = document.createElement("button");
         el.type = "button";
-        el.style.width = "16px";
-        el.style.height = "16px";
-        el.style.borderRadius = "50%";
+        // Round means the point is measured - it came off the photograph's
+        // own GPS. Square means someone placed it by hand, and so does
+        // unknown, which is every item recorded before this was tracked:
+        // claiming a precision nobody can vouch for is the worse mistake.
+        const precise = item.located_by === "photo";
+        el.style.width = precise ? "16px" : "14px";
+        el.style.height = precise ? "16px" : "14px";
+        el.style.borderRadius = precise ? "50%" : "2px";
         el.style.border = "2px solid white";
         el.style.boxShadow = "0 0 0 1px rgba(0,0,0,0.3)";
         el.style.cursor = "pointer";

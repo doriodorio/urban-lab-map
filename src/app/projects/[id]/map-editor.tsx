@@ -51,6 +51,8 @@ type Item = {
   created_by: string | null;
   /** null means "take it from the type" - see lib/categories. */
   category: string | null;
+  /** "photo" when the point came off the photograph's own GPS; see paintMarker. */
+  located_by: string | null;
 };
 type Project = {
   id: string;
@@ -277,16 +279,37 @@ function stackedItemIds(items: Item[]): Set<string> {
 const STACK_ANGLE_STEP = 15;
 const STACK_DISTINCT_ANGLES = 90 / STACK_ANGLE_STEP;
 
+/**
+ * A round mark means the point is measured; a square one means it was placed.
+ *
+ * A photograph's GPS puts the camera within a few metres. A point dropped by
+ * hand is somewhere near enough to read, and saying so on the map matters for
+ * this kind of work - a reader should be able to see at a glance which of the
+ * things in front of them are evidence of a position and which are an
+ * approximation.
+ *
+ * Unknown counts as placed. Every item made before this was recorded has no
+ * answer, and claiming a precision nobody can vouch for is the worse mistake.
+ *
+ * Stacking still overrides both: a cross means "several things are recorded
+ * here", which is about being able to reach them at all, and that has to win.
+ */
 function paintMarker(
   el: HTMLElement,
-  opts: { stacked: boolean; color: string; angle: number }
+  opts: { stacked: boolean; color: string; angle: number; precise: boolean }
 ) {
-  const { stacked, color, angle } = opts;
+  const { stacked, color, angle, precise } = opts;
   if (!stacked) {
     el.replaceChildren();
     el.style.width = "16px";
     el.style.height = "16px";
-    el.style.borderRadius = "50%";
+    // A square reads as bigger than a circle of the same width, so it is
+    // nudged down a little to sit level with its neighbours in a mixed set.
+    el.style.borderRadius = precise ? "50%" : "2px";
+    if (!precise) {
+      el.style.width = "14px";
+      el.style.height = "14px";
+    }
     el.style.border = "2px solid white";
     el.style.background = color;
     el.style.boxShadow = "0 0 0 1px rgba(0,0,0,0.3)";
@@ -875,6 +898,7 @@ export function MapEditor({
         stacked: stacked.has(item.id),
         color: layerColor(item.layer_id),
         angle: layerAngle(item.layer_id),
+        precise: item.located_by === "photo",
       });
       el.style.display = visible ? "block" : "none";
 
@@ -1923,6 +1947,7 @@ function ImportPanel({
         form.set("layer_id", layerId);
         form.set("geometry", JSON.stringify({ type: "Point", coordinates }));
         form.set("image", prepared.file);
+        if (prepared.coordinates) form.set("located_by", "photo");
         if (prepared.date) form.set("date_start", prepared.date);
 
         const result = await createItemAction({}, form);
@@ -2305,6 +2330,12 @@ function NewItemForm({
     (photoCoords[0] !== geometry.coordinates[0] ||
       photoCoords[1] !== geometry.coordinates[1]);
 
+  // The item is standing exactly where the photograph says it was taken, which
+  // is the only case that earns the precise mark. Comparing the two rather
+  // than remembering that a button was pressed means moving the pin afterwards
+  // withdraws the claim on its own.
+  const placedFromPhoto = Boolean(photoCoords) && !photoCoordsDiffer;
+
   // A photo is the substance of an image item and illustrative on a note or a
   // citation, so all of them offer the field - but only the first kind offers
   // to take the item's location from the photo. A cover picked to illustrate a
@@ -2329,6 +2360,9 @@ function NewItemForm({
         New item — {geometryLabel(geometry)}
       </p>
       <input type="hidden" name="geometry" value={JSON.stringify(geometry)} />
+      {placedFromPhoto && (
+        <input type="hidden" name="located_by" value="photo" />
+      )}
       <input type="hidden" name="type" value={type} />
 
       <select

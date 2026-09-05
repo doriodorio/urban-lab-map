@@ -57,7 +57,7 @@ export default async function ProjectMapPage({
   }
 
   const itemColumns =
-    "id, layer_id, type, title, body, attribution, tags, date_start, media, geometry, created_by, category";
+    "id, layer_id, type, title, body, attribution, tags, date_start, media, geometry, created_by, category, located_by";
 
   const [layersResult, itemsResult, deletedItemsResult] = await Promise.all([
     supabase

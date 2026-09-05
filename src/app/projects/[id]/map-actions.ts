@@ -251,6 +251,10 @@ export async function createItem(
   const image = formData.get("image") as File | null;
   const mediaFile = formData.get("media_file") as File | null;
   const mediaUrl = (formData.get("media_url") as string)?.trim() || null;
+  // Only 'photo' is a claim worth recording; anything else is a hand
+  // placement, which is what null already means.
+  const locatedBy =
+    (formData.get("located_by") as string) === "photo" ? "photo" : null;
 
   if (!title) {
     return { error: "Title is required." };
@@ -300,6 +304,7 @@ export async function createItem(
     date_start: dateStart || null,
     media,
     created_by: user?.id ?? null,
+    located_by: locatedBy,
   });
 
   if (error) {
@@ -345,7 +350,12 @@ export async function updateItemGeometry(
 
   const { error } = await supabase
     .from("items")
-    .update({ geometry: { type: "Point", coordinates: [lng, lat] } })
+    .update({
+      geometry: { type: "Point", coordinates: [lng, lat] },
+      // Dragging ends any claim that this point came off a photograph. Where
+      // it is now is where someone decided to put it.
+      located_by: null,
+    })
     .eq("id", itemId);
 
   if (error) {

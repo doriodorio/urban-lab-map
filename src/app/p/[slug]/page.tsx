@@ -31,6 +31,7 @@ type PublicProject = {
       type: "Point" | "LineString" | "Polygon";
       coordinates: never;
     };
+    located_by: string | null;
   }[];
   threads: { id: string; name: string; description: string | null }[];
   thread_items: {
