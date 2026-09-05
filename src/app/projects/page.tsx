@@ -2,6 +2,8 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { signOut, updateDisplayName } from "./actions";
+import { restoreProject, purgeProject } from "./[id]/actions";
+import { ProjectTrash } from "./project-trash";
 import { DisplayNameForm } from "./display-name-form";
 
 /** 09.2026 - the stamp a catalog entry carries, not a full date. */
@@ -26,7 +28,7 @@ export default async function ProjectsPage() {
     await Promise.all([
       supabase
         .from("projects")
-        .select("id, name, description, created_at")
+        .select("id, name, description, created_at, deleted_at")
         .order("created_at", { ascending: false }),
       supabase
         .from("profiles")
@@ -37,6 +39,13 @@ export default async function ProjectsPage() {
       // the projects this person belongs to, so it needs no filter of its own.
       supabase.from("items").select("project_id, updated_at").is("deleted_at", null),
     ]);
+
+  const live = (projects ?? []).filter((p) => !p.deleted_at);
+  const trashed = (projects ?? []).filter((p) => p.deleted_at);
+
+  // The administrator belongs to every project, so this is also how they find
+  // out a group has deleted one - it turns up in their trash.
+  const { data: isAdministrator } = await supabase.rpc("is_administrator");
 
   const counts = new Map<string, number>();
   const touched = new Map<string, string>();
@@ -82,18 +91,18 @@ export default async function ProjectsPage() {
         </p>
       )}
 
-      {projects && projects.length === 0 && (
+      {live.length === 0 && trashed.length === 0 && (
         <p className="text-sm text-ink-muted">
           No projects yet. Create one to get started.
         </p>
       )}
 
-      {projects && projects.length > 0 && (
+      {live.length > 0 && (
         <div className="flex flex-col">
           <p className="label border-b border-rule pb-2">00 &middot; Projects</p>
 
           <ul className="flex flex-col divide-y divide-rule border-b border-rule">
-            {projects.map((project, index) => {
+            {live.map((project, index) => {
               const count = counts.get(project.id) ?? 0;
               const updated = stamp(touched.get(project.id) ?? null);
               return (
@@ -128,11 +137,21 @@ export default async function ProjectsPage() {
           </ul>
 
           <p className="label pt-2">
-            {projects.length === 1 ? "1 project" : `${projects.length} projects`}{" "}
+            {live.length === 1 ? "1 project" : `${live.length} projects`}{" "}
             &middot; {total === 1 ? "1 item" : `${total} items`} in the catalog
           </p>
         </div>
       )}
+      <ProjectTrash
+        projects={trashed.map((p) => ({
+          id: p.id,
+          name: p.name,
+          deletedAt: p.deleted_at as string,
+        }))}
+        isAdministrator={Boolean(isAdministrator)}
+        restoreAction={restoreProject}
+        purgeAction={purgeProject}
+      />
     </main>
   );
 }

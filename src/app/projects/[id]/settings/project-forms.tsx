@@ -316,7 +316,13 @@ export function DeleteProjectButton({
         await action();
       }}
       onSubmit={(e) => {
-        if (!confirm("Delete this project? This cannot be undone.")) {
+        // No longer "cannot be undone" - saying so would be a lie, and would
+        // make people hesitate over something that is now recoverable.
+        if (
+          !confirm(
+            "Delete this project?\n\nIt stops being visible and its public link stops working. Any member can restore it from the workspace."
+          )
+        ) {
           e.preventDefault();
         }
       }}
