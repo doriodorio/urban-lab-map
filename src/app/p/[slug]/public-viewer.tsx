@@ -388,6 +388,35 @@ export function PublicViewer({
     else map.once("load", apply);
   }, [mapStyleId]);
 
+  // Clicking bare map puts the open item away.
+  //
+  // Only while exploring: during the guided tour the panel is showing the
+  // current stop, and clearing it would empty the tour under the reader's
+  // hands rather than closing something they opened.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || mode !== "explore") return;
+
+    const handleClick = (e: maplibregl.MapMouseEvent) => {
+      // Asked directly rather than left to handler ordering - see the editor,
+      // which does the same for the same reason. Markers are DOM siblings of
+      // the canvas, so a click on one never reaches here.
+      const shapeLayers = ["item-lines-layer", "item-polygons-fill"].filter(
+        (id) => map.getLayer(id)
+      );
+      const onShape =
+        shapeLayers.length > 0 &&
+        map.queryRenderedFeatures(e.point, { layers: shapeLayers }).length > 0;
+
+      if (!onShape) setSelectedItemId(null);
+    };
+
+    map.on("click", handleClick);
+    return () => {
+      map.off("click", handleClick);
+    };
+  }, [mode]);
+
   // Point markers.
   useEffect(() => {
     const map = mapRef.current;

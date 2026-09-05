@@ -695,6 +695,29 @@ export function MapEditor({
         setDrawMode(null);
       } else if (drawMode === "line" || drawMode === "polygon") {
         setDrawPoints((prev) => [...prev, [e.lngLat.lng, e.lngLat.lat]]);
+      } else {
+        // Clicking bare map puts the open item away, the way clicking outside
+        // anything does everywhere else.
+        //
+        // Which features are under the cursor is asked directly rather than
+        // left to handler ordering: a line or polygon click also reaches this
+        // listener, and whether it or the layer's own handler runs first is not
+        // something MapLibre promises. Markers need no such care - they are
+        // DOM siblings of the canvas, so a click on one never reaches the map.
+        //
+        // The perimeter is deliberately not in this list. It is an annotation
+        // over the map, not a thing to select, so clicking it should put the
+        // open item away like any other empty ground.
+        const shapeLayers = [
+          "item-lines-layer",
+          "item-polygons-fill",
+        ].filter((id) => map.getLayer(id));
+
+        const onShape =
+          shapeLayers.length > 0 &&
+          map.queryRenderedFeatures(e.point, { layers: shapeLayers }).length > 0;
+
+        if (!onShape) setSelectedItemId(null);
       }
     };
 
