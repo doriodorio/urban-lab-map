@@ -251,10 +251,9 @@ export async function createItem(
   const image = formData.get("image") as File | null;
   const mediaFile = formData.get("media_file") as File | null;
   const mediaUrl = (formData.get("media_url") as string)?.trim() || null;
-  // Only 'photo' is a claim worth recording; anything else is a hand
-  // placement, which is what null already means.
+  const claimed = formData.get("located_by") as string;
   const locatedBy =
-    (formData.get("located_by") as string) === "photo" ? "photo" : null;
+    claimed === "photo" || claimed === "moved" ? claimed : null;
 
   if (!title) {
     return { error: "Title is required." };
@@ -334,7 +333,7 @@ export async function updateItemGeometry(
   // silently flattening a line or polygon into a single point.
   const { data: item, error: readError } = await supabase
     .from("items")
-    .select("geometry")
+    .select("geometry, located_by")
     .eq("id", itemId)
     .maybeSingle();
 
@@ -348,13 +347,18 @@ export async function updateItemGeometry(
     return { error: "Only point items can be moved." };
   }
 
+  // Dragging a photograph's own position demotes it rather than erasing it:
+  // the picture still came from a camera that knew where it was, we have just
+  // stopped trusting that this is the spot. A hand-placed item that gets
+  // dragged was never making a claim, so it keeps not making one.
+  const wasLocated =
+    item.located_by === "photo" || item.located_by === "moved";
+
   const { error } = await supabase
     .from("items")
     .update({
       geometry: { type: "Point", coordinates: [lng, lat] },
-      // Dragging ends any claim that this point came off a photograph. Where
-      // it is now is where someone decided to put it.
-      located_by: null,
+      located_by: wasLocated ? "moved" : item.located_by,
     })
     .eq("id", itemId);
 

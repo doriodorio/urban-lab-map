@@ -1,13 +1,15 @@
 -- How an item came to be where it is.
 --
--- 'photo'  — the coordinates came out of the photograph's own GPS, so the
---            point is where the camera stood, to within a few metres.
--- 'manual' — someone put it there by hand, or dragged it. Close enough to
---            read, but not a measurement.
+-- 'photo' — the coordinates came out of the photograph's own GPS, so the point
+--           is where the camera stood, to within a few metres. Drawn as a
+--           filled circle.
+-- 'moved' — it began as one of those and was then moved by hand. The
+--           photograph vouches for the picture but no longer for the place.
+--           Drawn as a hollow circle.
 --
--- Null means we do not know, which is every item that existed before this
--- column. The map draws unknown the same as manual: claiming a precision we
--- cannot vouch for is the worse of the two mistakes.
+-- Null is everything else: placed by hand, or a photograph that carried no GPS
+-- at all. Drawn as a square. Every item that existed before this column is
+-- null, and claiming a precision nobody can vouch for is the worse mistake.
 --
 -- Deliberately not a boolean. "Located by what" leaves room for a third
 -- answer - an address lookup, a point traced off a survey - where

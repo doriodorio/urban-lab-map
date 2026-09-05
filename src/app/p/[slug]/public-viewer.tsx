@@ -431,15 +431,23 @@ export function PublicViewer({
       if (!marker) {
         const el = document.createElement("button");
         el.type = "button";
-        // Round means the point is measured - it came off the photograph's
-        // own GPS. Square means someone placed it by hand, and so does
-        // unknown, which is every item recorded before this was tracked:
-        // claiming a precision nobody can vouch for is the worse mistake.
-        const precise = item.located_by === "photo";
-        el.style.width = precise ? "16px" : "14px";
-        el.style.height = precise ? "16px" : "14px";
-        el.style.borderRadius = precise ? "50%" : "2px";
-        el.style.border = "2px solid white";
+        // Filled circle: a photograph's own GPS put it here. Hollow circle:
+        // it came from such a photograph and was then moved, so the picture is
+        // still evidence while the position is someone's judgement. Square:
+        // placed by hand, or a photograph with no GPS - which is also every
+        // item recorded before this was tracked.
+        const located = item.located_by;
+        const round = located === "photo" || located === "moved";
+        const size = round ? "16px" : "14px";
+        el.style.width = size;
+        el.style.height = size;
+        el.style.borderRadius = round ? "50%" : "2px";
+        el.style.border =
+          located === "moved"
+            ? `2px solid ${layerColor(item.layer_id)}`
+            : "2px solid white";
+        el.style.background =
+          located === "moved" ? "#ffffff" : layerColor(item.layer_id);
         el.style.boxShadow = "0 0 0 1px rgba(0,0,0,0.3)";
         el.style.cursor = "pointer";
         const itemId = item.id;
@@ -454,7 +462,14 @@ export function PublicViewer({
       }
 
       const el = marker.getElement();
-      el.style.background = layerColor(item.layer_id);
+      // Re-applied on every render because a layer's colour can change under
+      // it. A moved item keeps its colour in the ring rather than the fill, so
+      // this has to respect the shape rather than paint over it.
+      const moved = item.located_by === "moved";
+      el.style.background = moved ? "#ffffff" : layerColor(item.layer_id);
+      el.style.border = moved
+        ? `2px solid ${layerColor(item.layer_id)}`
+        : "2px solid white";
       el.style.display = visible(item) ? "block" : "none";
       // Highlight the current tour stop so the map matches the narration.
       el.style.transform =

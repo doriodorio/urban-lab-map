@@ -280,38 +280,46 @@ const STACK_ANGLE_STEP = 15;
 const STACK_DISTINCT_ANGLES = 90 / STACK_ANGLE_STEP;
 
 /**
- * A round mark means the point is measured; a square one means it was placed.
+ * How sure we are of where this point is, said in its shape.
  *
- * A photograph's GPS puts the camera within a few metres. A point dropped by
- * hand is somewhere near enough to read, and saying so on the map matters for
- * this kind of work - a reader should be able to see at a glance which of the
- * things in front of them are evidence of a position and which are an
- * approximation.
+ *   filled circle  a photograph's own GPS put it here, within a few metres
+ *   hollow circle  it came from such a photograph and was then moved
+ *   square         placed by hand, or a photograph that carried no GPS
  *
- * Unknown counts as placed. Every item made before this was recorded has no
+ * The hollow circle is the useful one: it says the picture is still evidence
+ * while the position is now someone's judgement, which is exactly the state a
+ * lot of this material ends up in. A blank would have lost that.
+ *
+ * Unknown draws as a square. Every item made before this was recorded has no
  * answer, and claiming a precision nobody can vouch for is the worse mistake.
  *
- * Stacking still overrides both: a cross means "several things are recorded
+ * Stacking overrides all three: a cross means "several things are recorded
  * here", which is about being able to reach them at all, and that has to win.
  */
 function paintMarker(
   el: HTMLElement,
-  opts: { stacked: boolean; color: string; angle: number; precise: boolean }
+  opts: {
+    stacked: boolean;
+    color: string;
+    angle: number;
+    located: string | null;
+  }
 ) {
-  const { stacked, color, angle, precise } = opts;
+  const { stacked, color, angle, located } = opts;
   if (!stacked) {
     el.replaceChildren();
-    el.style.width = "16px";
-    el.style.height = "16px";
-    // A square reads as bigger than a circle of the same width, so it is
-    // nudged down a little to sit level with its neighbours in a mixed set.
-    el.style.borderRadius = precise ? "50%" : "2px";
-    if (!precise) {
-      el.style.width = "14px";
-      el.style.height = "14px";
-    }
-    el.style.border = "2px solid white";
-    el.style.background = color;
+    const round = located === "photo" || located === "moved";
+    // A square reads as larger than a circle of the same width, so it is drawn
+    // slightly smaller to sit level with its neighbours in a mixed set.
+    const size = round ? 16 : 14;
+    el.style.width = `${size}px`;
+    el.style.height = `${size}px`;
+    el.style.borderRadius = round ? "50%" : "2px";
+    // Hollow: the layer's colour becomes the ring rather than the fill, so an
+    // emptied mark is still legibly its layer's.
+    el.style.border =
+      located === "moved" ? `2px solid ${color}` : "2px solid white";
+    el.style.background = located === "moved" ? "#ffffff" : color;
     el.style.boxShadow = "0 0 0 1px rgba(0,0,0,0.3)";
     return;
   }
@@ -898,7 +906,7 @@ export function MapEditor({
         stacked: stacked.has(item.id),
         color: layerColor(item.layer_id),
         angle: layerAngle(item.layer_id),
-        precise: item.located_by === "photo",
+        located: item.located_by,
       });
       el.style.display = visible ? "block" : "none";
 
@@ -2330,11 +2338,15 @@ function NewItemForm({
     (photoCoords[0] !== geometry.coordinates[0] ||
       photoCoords[1] !== geometry.coordinates[1]);
 
-  // The item is standing exactly where the photograph says it was taken, which
-  // is the only case that earns the precise mark. Comparing the two rather
-  // than remembering that a button was pressed means moving the pin afterwards
-  // withdraws the claim on its own.
-  const placedFromPhoto = Boolean(photoCoords) && !photoCoordsDiffer;
+  // Three answers, not two. Sitting exactly on the photograph's own point is a
+  // measurement; sitting somewhere else while still having come from a
+  // photograph that knew where it was is a demotion, not a blank. Compared
+  // rather than remembered, so nudging the pin changes the answer by itself.
+  const locatedBy = !photoCoords
+    ? null
+    : photoCoordsDiffer
+      ? "moved"
+      : "photo";
 
   // A photo is the substance of an image item and illustrative on a note or a
   // citation, so all of them offer the field - but only the first kind offers
@@ -2360,8 +2372,8 @@ function NewItemForm({
         New item — {geometryLabel(geometry)}
       </p>
       <input type="hidden" name="geometry" value={JSON.stringify(geometry)} />
-      {placedFromPhoto && (
-        <input type="hidden" name="located_by" value="photo" />
+      {locatedBy && (
+        <input type="hidden" name="located_by" value={locatedBy} />
       )}
       <input type="hidden" name="type" value={type} />
 
