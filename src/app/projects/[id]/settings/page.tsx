@@ -9,10 +9,12 @@ import {
   publishProject,
   unpublishProject,
 } from "../actions";
+import { relocateProjectMedia } from "../map-actions";
 import {
   EditProjectForm,
   InviteMemberForm,
   RemoveMemberButton,
+  RelocateMediaButton,
   DeleteProjectButton,
   PublishControls,
 } from "./project-forms";
@@ -63,6 +65,27 @@ export default async function ProjectSettingsPage({
         }[]
       | null;
   };
+
+  // Files are stored as "{project_id}/{name}". A file under a different id
+  // belongs to a project this item was moved out of - it still displays, but
+  // it can only be deleted by a member of that other project.
+  const { data: mediaItems } = await supabase
+    .from("items")
+    .select("media")
+    .eq("project_id", id);
+
+  const marker = "/storage/v1/object/public/project-media/";
+  const strayFiles = (mediaItems ?? []).reduce((count, row) => {
+    const media = (row.media ?? []) as { url: string }[];
+    return (
+      count +
+      media.filter((m) => {
+        const at = m.url?.indexOf(marker);
+        if (at === undefined || at === -1) return false;
+        return !m.url.slice(at + marker.length).startsWith(`${id}/`);
+      }).length
+    );
+  }, 0);
 
   return (
     <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-8 px-6 py-12">
@@ -139,6 +162,24 @@ export default async function ProjectSettingsPage({
         </ul>
         <InviteMemberForm action={inviteMember.bind(null, project.id)} />
       </section>
+
+      {strayFiles > 0 && (
+        <section className="flex flex-col gap-3">
+          <h2 className="label">Files</h2>
+          <p className="text-[13px] text-ink-secondary">
+            {strayFiles === 1
+              ? "One file in this project is"
+              : `${strayFiles} files in this project are`}{" "}
+            still stored under another project&apos;s folder, from being moved
+            here. They display normally, but they can only be deleted by
+            someone who belongs to that other project &mdash; and if it is ever
+            deleted, they can never be tidied up at all.
+          </p>
+          <RelocateMediaButton
+            action={relocateProjectMedia.bind(null, project.id)}
+          />
+        </section>
+      )}
 
       <section className="border-t border-rule pt-6">
         <DeleteProjectButton action={deleteProject.bind(null, project.id)} />

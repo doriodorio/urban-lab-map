@@ -267,6 +267,44 @@ export function PublishControls({
   );
 }
 
+/**
+ * Runs the file relocation and reports what happened.
+ *
+ * Safe to press twice: the action copies before it repoints and deletes only
+ * after, so a second run finishes anything the first one left.
+ */
+export function RelocateMediaButton({
+  action,
+}: {
+  action: () => Promise<{ error?: string; moved?: number; skipped?: number }>;
+}) {
+  const [running, setRunning] = useState(false);
+  const [result, setResult] = useState<string | null>(null);
+
+  return (
+    <div className="flex items-center gap-3">
+      <button
+        type="button"
+        disabled={running}
+        onClick={async () => {
+          setRunning(true);
+          const outcome = await action();
+          setRunning(false);
+          setResult(
+            outcome.error
+              ? outcome.error
+              : `Moved ${outcome.moved ?? 0} file${outcome.moved === 1 ? "" : "s"} into this project.`
+          );
+        }}
+        className="press rounded-md bg-ink px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+      >
+        {running ? "Moving…" : "Move files into this project"}
+      </button>
+      {result && <span className="text-[13px] text-ink-secondary">{result}</span>}
+    </div>
+  );
+}
+
 export function DeleteProjectButton({
   action,
 }: {

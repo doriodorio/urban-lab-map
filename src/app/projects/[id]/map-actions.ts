@@ -423,6 +423,104 @@ function storagePathFromUrl(url: string): string | null {
   return decodeURIComponent(url.slice(at + BUCKET_MARKER.length));
 }
 
+/**
+ * Bring this project's media files into its own storage folder.
+ *
+ * Files are stored as "{project_id}/{name}", and moving an item between
+ * projects leaves its file behind under the old project's id. That still
+ * *reads* - the bucket is public and its read policy checks nothing - so
+ * nothing looks broken. What breaks is administration: the delete policy asks
+ * whether you are a member of the project named in the path, so once that
+ * project is gone the file can never be removed, and permanently deleting the
+ * item would drop its record and orphan the file for good.
+ *
+ * Copy, then repoint the item, then delete the original - in that order. If it
+ * fails partway, every item still points at a file that exists: the ones
+ * already handled at their new home, the rest at the old one. Re-running
+ * finishes the job.
+ *
+ * Must be run while you are still a member of the *source* project, since
+ * removing the old file is checked against that membership.
+ */
+export async function relocateProjectMedia(
+  projectId: string
+): Promise<ActionResult & { moved?: number; skipped?: number }> {
+  const supabase = await createClient();
+
+  const { data: items, error: readError } = await supabase
+    .from("items")
+    .select("id, media")
+    .eq("project_id", projectId);
+
+  if (readError) {
+    return { error: readError.message };
+  }
+
+  const bucket = supabase.storage.from("project-media");
+  let moved = 0;
+  let skipped = 0;
+  const problems: string[] = [];
+
+  for (const item of items ?? []) {
+    const media = (item.media ?? []) as { url: string; type: string }[];
+    // Collected as we go rather than carried on the entries themselves, so the
+    // shape written back to the row is exactly the shape that came out of it.
+    const stale: string[] = [];
+    const next: { url: string; type: string }[] = [];
+
+    for (const entry of media) {
+      const path = storagePathFromUrl(entry.url);
+      const rest = path ? path.split("/").slice(1).join("/") : "";
+      // Not one of ours - a YouTube still, say - or already in place.
+      if (!path || !rest || path.startsWith(`${projectId}/`)) {
+        next.push(entry);
+        continue;
+      }
+
+      const target = `${projectId}/${rest}`;
+      const { error: copyError } = await bucket.copy(path, target);
+      // A duplicate means an earlier run copied it and stopped before
+      // repointing the item; carry on and repoint it now.
+      if (copyError && !/exist/i.test(copyError.message)) {
+        problems.push(copyError.message);
+        skipped += 1;
+        next.push(entry);
+        continue;
+      }
+
+      const {
+        data: { publicUrl },
+      } = bucket.getPublicUrl(target);
+      next.push({ ...entry, url: publicUrl });
+      stale.push(path);
+      moved += 1;
+    }
+
+    if (stale.length === 0) continue;
+
+    const { error: updateError } = await supabase
+      .from("items")
+      .update({ media: next })
+      .eq("id", item.id);
+
+    if (updateError) {
+      problems.push(updateError.message);
+      continue;
+    }
+
+    // Only now is the original safe to remove: the item already points at the
+    // copy, so a failed delete costs a stray file, not a picture.
+    await bucket.remove(stale);
+  }
+
+  revalidatePath(`/projects/${projectId}`);
+  revalidatePath(`/projects/${projectId}/settings`);
+
+  return problems.length
+    ? { error: `${moved} moved, ${skipped} could not be: ${problems[0]}` }
+    : { success: true, moved, skipped };
+}
+
 // Hard delete, restricted to the item's creator. The check is enforced by the
 // items_delete_creator RLS policy (see purge_items.sql); the explicit checks
 // here exist to return a useful message instead of a silent no-op, since a
