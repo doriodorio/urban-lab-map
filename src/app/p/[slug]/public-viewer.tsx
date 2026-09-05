@@ -297,11 +297,26 @@ export function PublicViewer({
     // without this the first labels render backwards.
     ensureRtlTextSupport();
 
+    // Open on the project's extent, the same as the editor does: a visitor
+    // should land on the project, not on a default point they have to find
+    // their way from.
+    const opening = projectPerimeter(items.map((i) => i.geometry));
     const map = new maplibregl.Map({
       container: mapContainer.current,
       style: initialStyle(project.base_map_style ?? DEFAULT_STYLE_ID),
       center: DEFAULT_CENTER,
       zoom: 12,
+      ...(opening
+        ? {
+            bounds: [
+              opening[0][0],
+              opening[0][1],
+              opening[2][0],
+              opening[2][1],
+            ] as [number, number, number, number],
+            fitBoundsOptions: { padding: 24, maxZoom: 17 },
+          }
+        : {}),
     });
     map.addControl(new maplibregl.NavigationControl(), "top-right");
     mapRef.current = map;

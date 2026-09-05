@@ -518,11 +518,31 @@ export function MapEditor({
     ensureRtlTextSupport();
 
     const initial = findStyle(mapStyleId);
+    // Open on the project's own extent rather than a fixed point in Tel Aviv.
+    // The perimeter already works this out, and it carries a margin, so the
+    // material sits inside the frame instead of touching its edges. A project
+    // with nothing in it yet falls back to the default view - there is no
+    // extent to fit.
+    const opening = projectPerimeter(items.map((i) => i.geometry));
     const map = new maplibregl.Map({
       container: mapContainer.current,
       style: initial.kind === "vector" ? initial.url : buildRasterStyle(initial),
       center: DEFAULT_CENTER,
       zoom: 12,
+      ...(opening
+        ? {
+            bounds: [
+              opening[0][0],
+              opening[0][1],
+              opening[2][0],
+              opening[2][1],
+            ] as [number, number, number, number],
+            // A single item, or several at one address, gives a box a few
+            // metres across - close enough to be inside a building. Stop at
+            // street level.
+            fitBoundsOptions: { padding: 24, maxZoom: 17 },
+          }
+        : {}),
     });
     map.addControl(new maplibregl.NavigationControl(), "top-right");
     mapRef.current = map;
