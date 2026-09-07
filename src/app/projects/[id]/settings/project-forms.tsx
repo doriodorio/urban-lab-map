@@ -88,8 +88,8 @@ export function EditProjectForm({
             className="rounded-md border border-rule bg-card px-3 py-2 text-sm outline-none focus:border-neutral-400"
           />
           <span className="text-[11px] text-ink-muted">
-            Paste the address of an image already in this project, or any
-            public image URL.
+            Open the photograph in the map, hover it, and press &ldquo;Copy
+            address&rdquo;. Or paste any public image URL.
           </span>
         </div>
 

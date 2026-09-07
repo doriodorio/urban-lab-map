@@ -604,7 +604,12 @@ export function PublicViewer({
 
   return (
     <div className="flex h-screen w-full flex-col md:flex-row">
-      <div className="relative min-h-0 flex-1">
+      {/* Half and half on a wide screen. The reading side is no longer a
+          sidebar beside the map - the statement, the film and the collection
+          are the point of the published view, and a 384px column made them
+          look like an afterthought next to it. min-w-0 on both halves so
+          neither is pushed wider than its share by its own content. */}
+      <div className="relative min-h-0 min-w-0 flex-1 md:w-1/2">
         <div ref={mapContainer} className="h-full w-full" />
 
         {galleryOn && (
@@ -666,7 +671,7 @@ export function PublicViewer({
         </div>
       </div>
 
-      <aside className="flex max-h-[48vh] w-full flex-col overflow-y-auto border-rule bg-card md:max-h-none md:w-96 md:border-l">
+      <aside className="flex max-h-[48vh] w-full min-w-0 flex-col overflow-y-auto border-rule bg-card md:max-h-none md:w-1/2 md:border-l">
         <nav className="sticky top-0 z-10 flex overflow-x-auto border-b border-rule bg-card">
           {stages.map((s, i) => (
             <StageTab

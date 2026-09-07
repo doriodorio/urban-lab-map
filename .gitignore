@@ -47,3 +47,6 @@ next-env.d.ts
 /urbanlabmaptool from zip/
 /shushan/
 /group-material/
+
+# Office lock files, created while a document is open.
+~$*

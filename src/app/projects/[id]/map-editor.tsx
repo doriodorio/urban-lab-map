@@ -1716,6 +1716,47 @@ function EmbeddedLink({
   );
 }
 
+/**
+ * A photograph in the item panel, with its address one click away.
+ *
+ * The address is needed to set a project's opening image, and the only way to
+ * get it was right-click, "Copy image address" - which is browser folklore
+ * rather than something the tool told anyone. Students would never find it.
+ */
+function ItemImage({ url, alt }: { url: string; alt: string }) {
+  const [copied, setCopied] = useState(false);
+
+  return (
+    <div className="group/img relative">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={url}
+        alt={alt}
+        draggable={false}
+        className="w-full rounded-md border border-rule"
+      />
+      <button
+        type="button"
+        onClick={async () => {
+          try {
+            await navigator.clipboard.writeText(url);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+          } catch {
+            // Clipboard access can be refused; select the address instead so
+            // it can still be copied by hand rather than leaving a dead
+            // button.
+            window.prompt("Copy this address:", url);
+          }
+        }}
+        className="press label absolute bottom-2 right-2 rounded border border-rule bg-card px-2 py-1 opacity-0 transition-opacity hover:text-ink focus:opacity-100 group-hover/img:opacity-100"
+      >
+        {copied ? "Copied" : "Copy address"}
+      </button>
+    </div>
+  );
+}
+
 function EmbeddedLinkBody({ url }: { url: string }) {
   const embed = toVideoEmbed(url);
 
@@ -2747,14 +2788,7 @@ function ItemDetail({
       {item.media?.map((m, i) => {
         if (m.type === "image") {
           return (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              key={i}
-              src={m.url}
-              alt={item.title ?? ""}
-              draggable={false}
-              className="w-full rounded-xl shadow-sm"
-            />
+            <ItemImage key={i} url={m.url} alt={item.title ?? ""} />
           );
         }
         if (m.type === "audio") {
