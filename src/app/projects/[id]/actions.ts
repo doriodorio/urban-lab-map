@@ -217,6 +217,25 @@ export async function purgeProject(projectId: string): Promise<ActionResult> {
   return { success: true };
 }
 
+export async function cancelInvitation(
+  projectId: string,
+  email: string
+): Promise<ActionResult> {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("project_invitations")
+    .delete()
+    .eq("project_id", projectId)
+    .eq("email", email);
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  revalidatePath(`/projects/${projectId}/settings`);
+  return { success: true };
+}
+
 export async function inviteMember(
   projectId: string,
   _prevState: ActionResult,
@@ -239,10 +258,24 @@ export async function inviteMember(
     return { error: lookupError.message };
   }
 
+  // Never signed in. Record the invitation against the address instead of
+  // refusing: groups are formed from a list of emails before term starts, and
+  // making a teacher chase six groups to log in first - so that they can then
+  // be added - is the wrong way round.
   if (!userId) {
-    return {
-      error: `No account found for ${email}. They need to sign in once (via magic link) before they can be added.`,
-    };
+    const { error: inviteError } = await supabase
+      .from("project_invitations")
+      .insert({ project_id: projectId, email });
+
+    if (inviteError) {
+      if (inviteError.code === "23505") {
+        return { error: `${email} has already been invited.` };
+      }
+      return { error: inviteError.message };
+    }
+
+    revalidatePath(`/projects/${projectId}/settings`);
+    return { success: true };
   }
 
   const { error: insertError } = await supabase

@@ -6,6 +6,7 @@ import {
   deleteProject,
   inviteMember,
   removeMember,
+  cancelInvitation,
   publishProject,
   unpublishProject,
 } from "../actions";
@@ -14,6 +15,7 @@ import {
   EditProjectForm,
   InviteMemberForm,
   RemoveMemberButton,
+  CancelInvitationButton,
   RelocateMediaButton,
   DeleteProjectButton,
   PublishControls,
@@ -65,6 +67,14 @@ export default async function ProjectSettingsPage({
         }[]
       | null;
   };
+
+  // People asked to join who have not signed in yet. They become members the
+  // moment they do, so this list is a waiting room, not a permission.
+  const { data: invitations } = await supabase
+    .from("project_invitations")
+    .select("email, created_at")
+    .eq("project_id", id)
+    .order("created_at");
 
   // Files are stored as "{project_id}/{name}". A file under a different id
   // belongs to a project this item was moved out of - it still displays, but
@@ -160,6 +170,34 @@ export default async function ProjectSettingsPage({
             </li>
           ))}
         </ul>
+        {invitations && invitations.length > 0 && (
+          <div className="flex flex-col gap-2 border-t border-rule pt-3">
+            <p className="label">Invited, not yet signed in</p>
+            <ul className="flex flex-col gap-2">
+              {invitations.map((invitation) => (
+                <li
+                  key={invitation.email}
+                  className="flex items-center justify-between text-sm"
+                >
+                  <span className="text-ink-secondary">{invitation.email}</span>
+                  <CancelInvitationButton
+                    action={cancelInvitation.bind(
+                      null,
+                      project.id,
+                      invitation.email
+                    )}
+                  />
+                </li>
+              ))}
+            </ul>
+            <p className="text-[11px] text-ink-muted">
+              They join this project automatically the first time they sign in.
+              Nothing is emailed by the tool &mdash; send them the address of
+              the site yourself.
+            </p>
+          </div>
+        )}
+
         <InviteMemberForm action={inviteMember.bind(null, project.id)} />
       </section>
 

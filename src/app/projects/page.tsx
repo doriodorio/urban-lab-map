@@ -24,6 +24,12 @@ export default async function ProjectsPage() {
     redirect("/login");
   }
 
+  // Claimed here as well as in the auth callback: a session restored from a
+  // cookie never passes through the callback, and someone invited while
+  // already signed in would otherwise wait until their next sign-in to see the
+  // project. Cheap, and does nothing when there is nothing to claim.
+  await supabase.rpc("claim_project_invitations");
+
   const [{ data: projects, error }, { data: profile }, { data: itemRows }] =
     await Promise.all([
       supabase

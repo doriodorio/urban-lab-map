@@ -177,6 +177,27 @@ export function RemoveMemberButton({
   );
 }
 
+export function CancelInvitationButton({
+  action,
+}: {
+  action: () => Promise<ActionResult>;
+}) {
+  return (
+    <form
+      action={async () => {
+        await action();
+      }}
+    >
+      <button
+        type="submit"
+        className="text-xs text-ink-muted underline hover:text-red-600"
+      >
+        Cancel
+      </button>
+    </form>
+  );
+}
+
 export function PublishControls({
   publicSlug,
   publishAction,

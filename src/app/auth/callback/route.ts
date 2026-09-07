@@ -74,5 +74,11 @@ export async function GET(request: Request) {
     return backToLogin(origin, "failed");
   }
 
+  // Turn any invitations addressed to this person into memberships, now that
+  // there is finally an account to attach them to. Failure is deliberately
+  // ignored: being signed in matters more than being enrolled this second, and
+  // the projects page claims again on load.
+  await supabase.rpc("claim_project_invitations");
+
   return NextResponse.redirect(new URL(destination, origin));
 }
