@@ -897,19 +897,34 @@ function StatementPanel({
 
   return (
     <div className="flex flex-col gap-4 px-4 pb-6 pt-4">
-      <h1 className="display text-[26px] leading-[1.1]">{name}</h1>
+      {/* dir="auto" rather than a hardcoded rtl: the browser reads the first
+          strong character and lays the block out accordingly, so a Hebrew
+          project reads right-to-left and an English one is untouched. No
+          setting for a group to get wrong. */}
+      <h1 dir="auto" className="display text-[30px] leading-[1.1]">
+        {name}
+      </h1>
 
       {coverImageUrl && (
+        // Capped at half the reading pane so the statement is still on screen
+        // beside it. A tall picture - a phone screenshot, say - would
+        // otherwise fill the column and push the argument below the fold,
+        // which is the one thing this stage exists to prevent. The pane is the
+        // full height on a wide screen and 48vh stacked, so the cap follows.
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={coverImageUrl}
           alt=""
-          className="w-full rounded-md border border-rule object-cover"
+          className="max-h-[24vh] w-full rounded-md border border-rule object-cover md:max-h-[50vh]"
         />
       )}
 
       {paragraphs.map((paragraph, i) => (
-        <p key={i} className="text-[14px] leading-relaxed text-ink-secondary">
+        <p
+          key={i}
+          dir="auto"
+          className="text-[18px] leading-relaxed text-ink-secondary"
+        >
           {paragraph}
         </p>
       ))}
@@ -1253,12 +1268,18 @@ function ItemCard({
       )}
 
       {/* Larger text wants tighter tracking and leading; body stays near 0. */}
-      <h2 className="text-[19px] font-semibold leading-[1.15] tracking-[-0.02em]">
+      <h2
+        dir="auto"
+        className="text-[19px] font-semibold leading-[1.15] tracking-[-0.02em]"
+      >
         {item.title || "Untitled"}
       </h2>
 
       {item.attribution && (
-        <p className="text-[13px] italic leading-snug text-neutral-500">
+        <p
+          dir="auto"
+          className="text-[13px] italic leading-snug text-neutral-500"
+        >
           — {item.attribution}
         </p>
       )}
@@ -1288,7 +1309,10 @@ function ItemCard({
       })}
 
       {item.body && (
-        <p className="whitespace-pre-wrap text-[14px] leading-relaxed text-neutral-700">
+        <p
+          dir="auto"
+          className="whitespace-pre-wrap text-[14px] leading-relaxed text-neutral-700"
+        >
           {item.body}
         </p>
       )}
