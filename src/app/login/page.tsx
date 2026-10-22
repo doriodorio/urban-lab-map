@@ -29,10 +29,17 @@ function LoginForm() {
   const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">(
     "idle"
   );
+  // Supabase's own words for what went wrong. "Something went wrong" sent you
+  // looking in the wrong place: the two real causes here - this origin missing
+  // from the redirect allow-list, and the hourly cap on the built-in mail
+  // sender - are both named plainly in the reply, and neither is fixed by the
+  // "try again" the generic message invites. React escapes it on the way in.
+  const [detail, setDetail] = useState<string | null>(null);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setStatus("sending");
+    setDetail(null);
     const supabase = createClient();
     const { error } = await supabase.auth.signInWithOtp({
       email,
@@ -40,7 +47,12 @@ function LoginForm() {
         emailRedirectTo: `${window.location.origin}/auth/callback`,
       },
     });
-    setStatus(error ? "error" : "sent");
+    if (error) {
+      setDetail(error.message);
+      setStatus("error");
+      return;
+    }
+    setStatus("sent");
   }
 
   return (
@@ -77,7 +89,7 @@ function LoginForm() {
           </button>
           {status === "error" && (
             <p className="text-sm text-red-600">
-              Something went wrong. Try again.
+              Couldn&rsquo;t send the link{detail ? `: ${detail}` : "."}
             </p>
           )}
         </form>
