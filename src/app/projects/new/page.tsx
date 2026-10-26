@@ -18,7 +18,7 @@ export default function NewProjectPage() {
   return (
     <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center gap-6 px-6">
       <div>
-        <Link href="/projects" className="text-sm text-neutral-500 underline">
+        <Link href="/projects" className="text-sm text-ink-secondary underline">
           ← Workspace
         </Link>
         <h1 className="display mt-2 text-xl">New project</h1>
@@ -33,7 +33,7 @@ export default function NewProjectPage() {
             id="name"
             name="name"
             required
-            className="rounded-md border border-rule bg-card px-3 py-2 text-sm outline-none focus:border-neutral-400"
+            className="rounded-md border border-rule bg-card px-3 py-2 text-sm outline-none focus:border-ink-muted"
           />
         </div>
 
@@ -45,7 +45,7 @@ export default function NewProjectPage() {
             id="description"
             name="description"
             rows={3}
-            className="rounded-md border border-rule bg-card px-3 py-2 text-sm outline-none focus:border-neutral-400"
+            className="rounded-md border border-rule bg-card px-3 py-2 text-sm outline-none focus:border-ink-muted"
           />
         </div>
 

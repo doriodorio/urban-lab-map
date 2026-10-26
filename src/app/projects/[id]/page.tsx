@@ -88,17 +88,17 @@ export default async function ProjectMapPage({
     return (
       <main className="mx-auto flex min-h-screen max-w-lg flex-col justify-center gap-4 px-6">
         <h1 className="display text-lg">Couldn&apos;t load this map</h1>
-        <p className="text-sm text-neutral-600">
+        <p className="text-sm text-ink-secondary">
           Your items are still stored — this is a problem reading them, not a
           deletion. Retry in a moment; if it persists, send this to whoever
           maintains the tool:
         </p>
-        <pre className="overflow-x-auto rounded bg-neutral-100 p-3 text-xs">
+        <pre className="overflow-x-auto rounded bg-paper p-3 text-xs">
           {loadError.message}
         </pre>
         <Link
           href="/projects"
-          className="text-sm text-neutral-500 underline"
+          className="text-sm text-ink-secondary underline"
         >
           ← Workspace
         </Link>

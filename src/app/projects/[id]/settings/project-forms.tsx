@@ -38,7 +38,7 @@ export function EditProjectForm({
           name="name"
           defaultValue={name}
           required
-          className="rounded-md border border-rule bg-card px-3 py-2 text-sm outline-none focus:border-neutral-400"
+          className="rounded-md border border-rule bg-card px-3 py-2 text-sm outline-none focus:border-ink-muted"
         />
       </div>
       <div className="flex flex-col gap-1">
@@ -50,7 +50,7 @@ export function EditProjectForm({
           name="description"
           defaultValue={description ?? ""}
           rows={3}
-          className="rounded-md border border-rule bg-card px-3 py-2 text-sm outline-none focus:border-neutral-400"
+          className="rounded-md border border-rule bg-card px-3 py-2 text-sm outline-none focus:border-ink-muted"
         />
       </div>
       <div className="flex flex-col gap-3 border-t border-rule pt-3">
@@ -71,7 +71,7 @@ export function EditProjectForm({
             defaultValue={statement ?? ""}
             rows={6}
             placeholder="Up to two paragraphs. Leave a blank line between them."
-            className="rounded-md border border-rule bg-card px-3 py-2 text-sm outline-none focus:border-neutral-400"
+            className="rounded-md border border-rule bg-card px-3 py-2 text-sm outline-none focus:border-ink-muted"
           />
         </div>
 
@@ -85,7 +85,7 @@ export function EditProjectForm({
             type="url"
             defaultValue={coverImageUrl ?? ""}
             placeholder="https://…"
-            className="rounded-md border border-rule bg-card px-3 py-2 text-sm outline-none focus:border-neutral-400"
+            className="rounded-md border border-rule bg-card px-3 py-2 text-sm outline-none focus:border-ink-muted"
           />
           <span className="text-[11px] text-ink-muted">
             Open the photograph in the map, hover it, and press &ldquo;Copy
@@ -103,7 +103,7 @@ export function EditProjectForm({
             type="url"
             defaultValue={docoUrl ?? ""}
             placeholder="https://youtube.com/watch?v=…"
-            className="rounded-md border border-rule bg-card px-3 py-2 text-sm outline-none focus:border-neutral-400"
+            className="rounded-md border border-rule bg-card px-3 py-2 text-sm outline-none focus:border-ink-muted"
           />
           <span className="text-[11px] text-ink-muted">
             YouTube or Vimeo plays in place. Anything else becomes a link.
@@ -141,7 +141,7 @@ export function InviteMemberForm({ action }: { action: BoundAction }) {
           name="email"
           required
           placeholder="teammate@bezalel.ac.il"
-          className="flex-1 rounded-md border border-rule bg-card px-3 py-1.5 text-sm outline-none focus:border-neutral-400"
+          className="flex-1 rounded-md border border-rule bg-card px-3 py-1.5 text-sm outline-none focus:border-ink-muted"
         />
         <button
           type="submit"
@@ -228,7 +228,7 @@ export function PublishControls({
         }}
         className="flex flex-col gap-2"
       >
-        <p className="text-sm text-neutral-600">
+        <p className="text-sm text-ink-secondary">
           Not published. Publishing creates a link that shows a read-only
           version of this map to anyone who has it — no account needed.
         </p>
@@ -244,10 +244,10 @@ export function PublishControls({
 
   return (
     <div className="flex flex-col gap-2">
-      <p className="text-sm text-neutral-600">
+      <p className="text-sm text-ink-secondary">
         Published. Anyone with this link can read the map:
       </p>
-      <code className="overflow-x-auto rounded bg-neutral-100 px-2 py-1.5 text-xs">
+      <code className="overflow-x-auto rounded bg-paper px-2 py-1.5 text-xs">
         {path}
       </code>
       <div className="flex items-center gap-4">

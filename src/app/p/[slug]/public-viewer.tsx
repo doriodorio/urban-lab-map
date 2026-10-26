@@ -664,7 +664,7 @@ export function PublicViewer({
             {project.name}
           </p>
           {project.description && (
-            <p className="mt-0.5 text-[13px] leading-snug text-neutral-600">
+            <p className="mt-0.5 text-[13px] leading-snug text-ink-secondary">
               {project.description}
             </p>
           )}
@@ -990,7 +990,7 @@ function TourPanel({
         <select
           value={threadId ?? ""}
           onChange={(e) => onThreadChange(e.target.value)}
-          className="rounded-lg border border-neutral-300/80 bg-white/70 px-2.5 py-2 text-[13px]"
+          className="rounded-lg border border-rule/80 bg-white/70 px-2.5 py-2 text-[13px]"
         >
           {threads.map((t) => (
             <option key={t.id} value={t.id}>
@@ -1006,13 +1006,13 @@ function TourPanel({
         </p>
       )}
       {thread?.description && (
-        <p className="text-[13px] leading-snug text-neutral-600">
+        <p className="text-[13px] leading-snug text-ink-secondary">
           {thread.description}
         </p>
       )}
 
       {steps.length === 0 ? (
-        <p className="text-[13px] text-neutral-500">This tour has no stops yet.</p>
+        <p className="text-[13px] text-ink-secondary">This tour has no stops yet.</p>
       ) : (
         <>
           {/* Progress as position, not just a count - it shows how much is
@@ -1022,14 +1022,14 @@ function TourPanel({
               <span
                 key={s.item_id}
                 className={`h-1 flex-1 rounded-full transition-colors duration-300 ${
-                  i <= stepIndex ? "bg-neutral-900" : "bg-neutral-900/15"
+                  i <= stepIndex ? "bg-ink" : "bg-ink/15"
                 }`}
               />
             ))}
           </div>
 
           <div className="flex items-center justify-between gap-2">
-            <span className="text-[12px] tabular-nums text-neutral-500">
+            <span className="text-[12px] tabular-nums text-ink-secondary">
               {stepIndex + 1} of {steps.length}
             </span>
             <div className="flex gap-2">
@@ -1094,7 +1094,7 @@ function ExplorePanel({
         value={query}
         onChange={(e) => onQueryChange(e.target.value)}
         placeholder="Search this map…"
-        className="rounded-lg border border-neutral-300/80 bg-white/70 px-3 py-2 text-[13px] outline-none focus:border-neutral-400"
+        className="rounded-lg border border-rule/80 bg-white/70 px-3 py-2 text-[13px] outline-none focus:border-ink-muted"
       />
 
       {layers.length > 0 && (
@@ -1111,7 +1111,7 @@ function ExplorePanel({
                 type="checkbox"
                 checked={!hiddenLayerIds.has(layer.id)}
                 onChange={() => onToggleLayer(layer.id)}
-                className="accent-neutral-900"
+                className="accent-ink"
               />
               <span
                 className="h-2.5 w-2.5 shrink-0 rounded-full ring-1 ring-black/10"
@@ -1177,7 +1177,7 @@ function ExplorePanel({
                       <li key={item.id}>
                         <button
                           onClick={() => onSelect(item)}
-                          className="press w-full truncate rounded-lg px-2 py-1.5 text-left text-[13px] text-neutral-800 hover:bg-neutral-900/[0.05]"
+                          className="press w-full truncate rounded-lg px-2 py-1.5 text-left text-[13px] text-ink hover:bg-ink/[0.05]"
                         >
                           {item.title || "Untitled"}
                         </button>
@@ -1256,7 +1256,7 @@ function ItemCard({
     >
       {/* The guide's voice, set apart from the item's own content. */}
       {narration && (
-        <p className="border-l-2 border-neutral-900/20 pl-3 text-[14px] leading-relaxed text-neutral-700">
+        <p className="border-l-2 border-ink/20 pl-3 text-[14px] leading-relaxed text-ink">
           {narration}
         </p>
       )}
@@ -1278,7 +1278,7 @@ function ItemCard({
       {item.attribution && (
         <p
           dir="auto"
-          className="text-[13px] italic leading-snug text-neutral-500"
+          className="text-[13px] italic leading-snug text-ink-secondary"
         >
           — {item.attribution}
         </p>
@@ -1311,7 +1311,7 @@ function ItemCard({
       {item.body && (
         <p
           dir="auto"
-          className="whitespace-pre-wrap text-[14px] leading-relaxed text-neutral-700"
+          className="whitespace-pre-wrap text-[14px] leading-relaxed text-ink"
         >
           {item.body}
         </p>
@@ -1320,7 +1320,7 @@ function ItemCard({
       {(item.date_start || (item.tags && item.tags.length > 0)) && (
         <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
           {item.date_start && (
-            <span className="text-[12px] tabular-nums text-neutral-500">
+            <span className="text-[12px] tabular-nums text-ink-secondary">
               {item.date_start}
             </span>
           )}

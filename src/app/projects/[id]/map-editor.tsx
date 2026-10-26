@@ -1095,7 +1095,7 @@ export function MapEditor({
         <div className="absolute left-3 top-3 flex items-center gap-3 rounded-md border border-rule bg-card px-3.5 py-2">
           <Link
             href="/projects"
-            className="press rounded-lg px-1 text-[13px] text-neutral-500 hover:text-neutral-900"
+            className="press rounded-lg px-1 text-[13px] text-ink-secondary hover:text-ink"
           >
             ← Workspace
           </Link>
@@ -1106,17 +1106,17 @@ export function MapEditor({
 
           {/* A hairline groups the project's own destinations away from the
               way back out, so the bar reads as two things rather than five. */}
-          <span aria-hidden className="h-4 w-px bg-neutral-900/15" />
+          <span aria-hidden className="h-4 w-px bg-ink/15" />
 
           <Link
             href={`/projects/${project.id}/threads`}
-            className="press rounded-lg px-1 text-[13px] text-neutral-500 hover:text-neutral-900"
+            className="press rounded-lg px-1 text-[13px] text-ink-secondary hover:text-ink"
           >
             Threads
           </Link>
           <Link
             href={`/projects/${project.id}/settings`}
-            className="press rounded-lg px-1 text-[13px] text-neutral-500 hover:text-neutral-900"
+            className="press rounded-lg px-1 text-[13px] text-ink-secondary hover:text-ink"
           >
             Settings
           </Link>
@@ -1127,8 +1127,8 @@ export function MapEditor({
             title="Show items as thumbnails with their titles in the margins"
             className={`press rounded-lg px-2 py-1 text-[13px] font-medium ${
               previewMode
-                ? "bg-neutral-900 text-white"
-                : "text-neutral-600 hover:bg-neutral-900/[0.06]"
+                ? "bg-ink text-white"
+                : "text-ink-secondary hover:bg-ink/[0.06]"
             }`}
           >
             Gallery
@@ -1148,7 +1148,7 @@ export function MapEditor({
               });
             }}
             aria-label="Base map style"
-            className="rounded-lg border border-rule bg-card px-2 py-1 text-[13px] outline-none focus:border-neutral-400"
+            className="rounded-lg border border-rule bg-card px-2 py-1 text-[13px] outline-none focus:border-ink-muted"
           >
             {MAP_STYLES.map((s) => (
               <option key={s.id} value={s.id}>
@@ -1172,7 +1172,7 @@ export function MapEditor({
                 <button
                   onClick={finishDrawing}
                   disabled={!minPointsMet}
-                  className="press rounded-xl bg-neutral-900 px-3.5 py-1.5 text-[13px] font-medium text-white disabled:opacity-35"
+                  className="press rounded-xl bg-ink px-3.5 py-1.5 text-[13px] font-medium text-white disabled:opacity-35"
                 >
                   Finish
                   <span className="ml-1.5 tabular-nums opacity-60">
@@ -1181,7 +1181,7 @@ export function MapEditor({
                 </button>
                 <button
                   onClick={() => toggleDrawMode(drawMode)}
-                  className="press rounded-xl px-3 py-1.5 text-[13px] text-neutral-600 hover:text-neutral-900"
+                  className="press rounded-xl px-3 py-1.5 text-[13px] text-ink-secondary hover:text-ink"
                 >
                   Cancel
                 </button>
@@ -1207,7 +1207,7 @@ export function MapEditor({
               onClick={() => toggleDrawMode("polygon")}
             />
             {drawMode && (
-              <span className="px-2 text-[12px] text-neutral-500">
+              <span className="px-2 text-[12px] text-ink-secondary">
                 {drawMode === "point"
                   ? "Click the map"
                   : "Click to add points"}
@@ -1395,7 +1395,7 @@ function LayerEditRow({
   };
 
   return (
-    <li className="flex flex-col gap-2 rounded-lg bg-neutral-900/[0.04] px-2 py-2">
+    <li className="flex flex-col gap-2 rounded-lg bg-ink/[0.04] px-2 py-2">
       <div className="flex items-center gap-2">
         <input
           type="color"
@@ -1410,7 +1410,7 @@ function LayerEditRow({
           onChange={(e) => setName(e.target.value)}
           aria-label={`Name for ${layer.name}`}
           autoFocus
-          className="min-w-0 flex-1 rounded-lg border border-rule bg-card px-2.5 py-1.5 text-[13px] outline-none focus:border-neutral-400"
+          className="min-w-0 flex-1 rounded-lg border border-rule bg-card px-2.5 py-1.5 text-[13px] outline-none focus:border-ink-muted"
         />
       </div>
       <div className="flex items-center gap-2">
@@ -1430,11 +1430,11 @@ function LayerEditRow({
         <button
           type="button"
           onClick={onCancel}
-          className="press rounded-full px-3 py-1 text-[12px] text-neutral-500 hover:text-neutral-900"
+          className="press rounded-full px-3 py-1 text-[12px] text-ink-secondary hover:text-ink"
         >
           Cancel
         </button>
-        <span className="ml-auto text-[11px] text-neutral-400">
+        <span className="ml-auto text-[11px] text-ink-muted">
           {itemCount === 1 ? "1 item" : `${itemCount} items`}
         </span>
       </div>
@@ -1484,13 +1484,13 @@ function LayerPanel({
   return (
     <div className="flex flex-col gap-3 p-4">
       <div className="-mx-2 border-b border-rule pb-2">
-        <label className="flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-[13px] hover:bg-neutral-900/[0.04]">
+        <label className="flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-[13px] hover:bg-ink/[0.04]">
           <input
             type="checkbox"
             checked={showPerimeter}
             onChange={onTogglePerimeter}
             disabled={!hasPerimeter}
-            className="accent-neutral-900"
+            className="accent-ink"
           />
           {/* A dashed swatch, matching how it is drawn, rather than the solid
               dot a real layer gets - it is an annotation, not content. */}
@@ -1529,13 +1529,13 @@ function LayerPanel({
             // Edit and delete only surface on hover/focus-within: they sit next
             // to a control people toggle constantly, and shouldn't be equally
             // reachable by accident.
-            className="group flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-[13px] hover:bg-neutral-900/[0.04]"
+            className="group flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-[13px] hover:bg-ink/[0.04]"
           >
             <input
               type="checkbox"
               checked={!hiddenLayerIds.has(layer.id)}
               onChange={() => onToggle(layer.id)}
-              className="accent-neutral-900"
+              className="accent-ink"
             />
             <span
               className="h-2.5 w-2.5 shrink-0 rounded-full ring-1 ring-black/10"
@@ -1548,7 +1548,7 @@ function LayerPanel({
             <button
               type="button"
               onClick={() => setEditingId(layer.id)}
-              className="press rounded-md px-1.5 py-0.5 text-[12px] text-neutral-400 opacity-0 transition-opacity hover:text-neutral-900 focus:opacity-100 group-hover:opacity-100"
+              className="press rounded-md px-1.5 py-0.5 text-[12px] text-ink-muted opacity-0 transition-opacity hover:text-ink focus:opacity-100 group-hover:opacity-100"
             >
               Edit
             </button>
@@ -1568,7 +1568,7 @@ function LayerPanel({
             >
               <button
                 type="submit"
-                className="press rounded-md px-1.5 py-0.5 text-[12px] text-neutral-400 opacity-0 transition-opacity hover:text-red-600 focus:opacity-100 group-hover:opacity-100"
+                className="press rounded-md px-1.5 py-0.5 text-[12px] text-ink-muted opacity-0 transition-opacity hover:text-red-600 focus:opacity-100 group-hover:opacity-100"
               >
                 Delete
               </button>
@@ -1577,7 +1577,7 @@ function LayerPanel({
           )
         )}
         {layers.length === 0 && (
-          <li className="px-2 text-[13px] text-neutral-400">No layers yet.</li>
+          <li className="px-2 text-[13px] text-ink-muted">No layers yet.</li>
         )}
       </ul>
 
@@ -1601,7 +1601,7 @@ function LayerPanel({
             name="name"
             required
             placeholder="e.g. Interviews"
-            className="flex-1 rounded-lg border border-rule bg-card px-2.5 py-1.5 text-[13px] outline-none focus:border-neutral-400"
+            className="flex-1 rounded-lg border border-rule bg-card px-2.5 py-1.5 text-[13px] outline-none focus:border-ink-muted"
           />
         </div>
         <button
@@ -1654,7 +1654,7 @@ function EmbeddedLink({
             setDraft(e.target.value);
             setError(null);
           }}
-          className="w-full rounded-lg border border-rule bg-card px-2.5 py-1.5 text-[13px] outline-none focus:border-neutral-400"
+          className="w-full rounded-lg border border-rule bg-card px-2.5 py-1.5 text-[13px] outline-none focus:border-ink-muted"
         />
         {/* Says up front whether the new link will play or fall back to a
             plain link, so the difference isn't a surprise after saving. */}
@@ -1781,7 +1781,7 @@ function EmbeddedLinkBody({ url }: { url: string }) {
       href={url}
       target="_blank"
       rel="noreferrer noopener"
-      className="press flex flex-col gap-0.5 rounded-lg border border-rule bg-card px-2.5 py-2 hover:border-neutral-400"
+      className="press flex flex-col gap-0.5 rounded-lg border border-rule bg-card px-2.5 py-2 hover:border-ink-muted"
     >
       {host && (
         <span className="label">
@@ -1810,8 +1810,8 @@ function DrawTool({
       aria-pressed={active}
       className={`press rounded-xl px-3.5 py-1.5 text-[13px] font-medium ${
         active
-          ? "bg-neutral-900 text-white"
-          : "text-neutral-700 hover:bg-neutral-900/[0.06]"
+          ? "bg-ink text-white"
+          : "text-ink hover:bg-ink/[0.06]"
       }`}
     >
       {label}
@@ -1834,12 +1834,12 @@ function PanelTab({
     <button
       onClick={onClick}
       className={`press relative flex-1 whitespace-nowrap px-1 py-2.5 text-[12px] ${
-        active ? "font-semibold text-neutral-900" : "text-neutral-500"
+        active ? "font-semibold text-ink" : "text-ink-secondary"
       }`}
     >
       {label}
       {count ? (
-        <span className="ml-1 rounded-full bg-neutral-900/10 px-1.5 py-0.5 text-[10px] tabular-nums">
+        <span className="ml-1 rounded-full bg-ink/10 px-1.5 py-0.5 text-[10px] tabular-nums">
           {count}
         </span>
       ) : null}
@@ -1847,7 +1847,7 @@ function PanelTab({
           bar stays a floating layer rather than a hard divider. */}
       <span
         aria-hidden
-        className={`absolute inset-x-2 bottom-0 h-0.5 rounded-full bg-neutral-900 transition-opacity duration-200 ${
+        className={`absolute inset-x-2 bottom-0 h-0.5 rounded-full bg-ink transition-opacity duration-200 ${
           active ? "opacity-100" : "opacity-0"
         }`}
       />
@@ -1869,14 +1869,14 @@ function SearchBox({
   onSelectResult: (item: Item) => void;
 }) {
   return (
-    <div className="flex flex-col gap-2 border-b border-neutral-200 p-3">
+    <div className="flex flex-col gap-2 border-b border-rule p-3">
       <div className="relative">
         <input
           type="search"
           value={query}
           onChange={(e) => onQueryChange(e.target.value)}
           placeholder="Search title, text, source, tag…"
-          className="w-full rounded-lg border border-rule bg-card px-2.5 py-1.5 text-[13px] outline-none focus:border-neutral-400"
+          className="w-full rounded-lg border border-rule bg-card px-2.5 py-1.5 text-[13px] outline-none focus:border-ink-muted"
         />
       </div>
 
@@ -1884,7 +1884,7 @@ function SearchBox({
           result list would push the panels below it off-screen. */}
       {query && (
         <>
-          <p className="text-xs text-neutral-400">
+          <p className="text-xs text-ink-muted">
             {results.length} of {totalCount} shown on the map
           </p>
           <ul className="flex max-h-64 flex-col overflow-y-auto">
@@ -1900,10 +1900,10 @@ function SearchBox({
             ))}
           </ul>
           {results.length === 0 && (
-            <p className="text-sm text-neutral-400">No matches.</p>
+            <p className="text-sm text-ink-muted">No matches.</p>
           )}
           {results.length > 50 && (
-            <p className="text-xs text-neutral-400">
+            <p className="text-xs text-ink-muted">
               Showing the first 50 — narrow the search to see more.
             </p>
           )}
@@ -2028,7 +2028,7 @@ function ImportPanel({
 
   return (
     <div className="flex flex-col gap-3 p-4">
-      <p className="text-xs text-neutral-500">
+      <p className="text-xs text-ink-secondary">
         Add a folder of photos at once. Each becomes its own image item, placed
         from the photo&apos;s own GPS where it has any. HEIC files are converted
         to JPEG, since browsers can&apos;t display them.
@@ -2050,7 +2050,7 @@ function ImportPanel({
         value={layerId}
         onChange={(e) => setLayerId(e.target.value)}
         disabled={running}
-        className="rounded-lg border border-rule bg-card px-2.5 py-1.5 text-[13px] outline-none focus:border-neutral-400"
+        className="rounded-lg border border-rule bg-card px-2.5 py-1.5 text-[13px] outline-none focus:border-ink-muted"
       >
         <option value="">No layer</option>
         {layers.map((l) => (
@@ -2060,7 +2060,7 @@ function ImportPanel({
         ))}
       </select>
 
-      <label className="flex items-start gap-2 text-xs text-neutral-600">
+      <label className="flex items-start gap-2 text-xs text-ink-secondary">
         <input
           type="checkbox"
           checked={includeUnlocated}
@@ -2088,7 +2088,7 @@ function ImportPanel({
 
       {rows.length > 0 && (
         <>
-          <p className="text-xs text-neutral-500">
+          <p className="text-xs text-ink-secondary">
             {done} added ({located} placed from GPS)
             {failed > 0 && `, ${failed} failed`}
           </p>
@@ -2110,7 +2110,7 @@ function ImportPanel({
                     className={`pl-4 ${
                       row.status === "error"
                         ? "text-red-600"
-                        : "text-neutral-400"
+                        : "text-ink-muted"
                     }`}
                   >
                     {row.detail}
@@ -2138,26 +2138,26 @@ function TrashPanel({
 }) {
   return (
     <div className="flex flex-col gap-3 p-4">
-      <p className="text-xs text-neutral-500">
+      <p className="text-xs text-ink-secondary">
         Deleted items are kept here indefinitely, so anyone in the project can
         undo a mistaken delete. Only the person who added an item can remove
         it for good.
       </p>
 
       {deletedItems.length === 0 && (
-        <p className="text-sm text-neutral-400">Nothing deleted.</p>
+        <p className="text-sm text-ink-muted">Nothing deleted.</p>
       )}
 
       <ul className="flex flex-col gap-3">
         {deletedItems.map((item) => (
           <li
             key={item.id}
-            className="flex flex-col gap-1 border-b border-neutral-100 pb-3"
+            className="flex flex-col gap-1 border-b border-rule pb-3"
           >
             <span className="text-sm font-medium">
               {item.title || "Untitled"}
             </span>
-            <span className="text-xs text-neutral-400">
+            <span className="text-xs text-ink-muted">
               {TYPE_OPTIONS.find((t) => t.value === item.type)?.label ??
                 item.type}
               {item.deleted_at &&
@@ -2196,7 +2196,7 @@ function TrashPanel({
                 >
                   <button
                     type="submit"
-                    className="text-xs text-neutral-400 underline hover:text-red-600"
+                    className="text-xs text-ink-muted underline hover:text-red-600"
                   >
                     Delete permanently
                   </button>
@@ -2238,7 +2238,7 @@ function FiltersPanel({
           Tags
         </p>
         {allTags.length === 0 && (
-          <p className="text-sm text-neutral-400">No tags yet.</p>
+          <p className="text-sm text-ink-muted">No tags yet.</p>
         )}
         <ul className="flex flex-col gap-1">
           {allTags.map((tag) => (
@@ -2254,26 +2254,26 @@ function FiltersPanel({
         </ul>
       </div>
 
-      <div className="flex flex-col gap-2 border-t border-neutral-200 pt-4">
+      <div className="flex flex-col gap-2 border-t border-rule pt-4">
         <p className="label">
           Timeline
         </p>
-        <label className="flex flex-col gap-1 text-xs text-neutral-500">
+        <label className="flex flex-col gap-1 text-xs text-ink-secondary">
           From
           <input
             type="date"
             value={dateFrom ?? ""}
             onChange={(e) => onDateFromChange(e.target.value || null)}
-            className="rounded-lg border border-rule bg-card px-2.5 py-1.5 text-[13px] outline-none focus:border-neutral-400"
+            className="rounded-lg border border-rule bg-card px-2.5 py-1.5 text-[13px] outline-none focus:border-ink-muted"
           />
         </label>
-        <label className="flex flex-col gap-1 text-xs text-neutral-500">
+        <label className="flex flex-col gap-1 text-xs text-ink-secondary">
           To
           <input
             type="date"
             value={dateTo ?? ""}
             onChange={(e) => onDateToChange(e.target.value || null)}
-            className="rounded-lg border border-rule bg-card px-2.5 py-1.5 text-[13px] outline-none focus:border-neutral-400"
+            className="rounded-lg border border-rule bg-card px-2.5 py-1.5 text-[13px] outline-none focus:border-ink-muted"
           />
         </label>
         {(dateFrom || dateTo) && (
@@ -2282,12 +2282,12 @@ function FiltersPanel({
               onDateFromChange(null);
               onDateToChange(null);
             }}
-            className="self-start text-xs text-neutral-400 underline"
+            className="self-start text-xs text-ink-muted underline"
           >
             Clear
           </button>
         )}
-        <p className="text-xs text-neutral-400">
+        <p className="text-xs text-ink-muted">
           Items without a date are always shown.
         </p>
       </div>
@@ -2407,7 +2407,7 @@ function NewItemForm({
   return (
     <form
       action={formAction}
-      className="flex flex-col gap-2 border-t border-neutral-200 p-4"
+      className="flex flex-col gap-2 border-t border-rule p-4"
     >
       <p className="label">
         New item — {geometryLabel(geometry)}
@@ -2421,7 +2421,7 @@ function NewItemForm({
       <select
         value={type}
         onChange={(e) => setType(e.target.value)}
-        className="rounded-lg border border-rule bg-card px-2.5 py-1.5 text-[13px] outline-none focus:border-neutral-400"
+        className="rounded-lg border border-rule bg-card px-2.5 py-1.5 text-[13px] outline-none focus:border-ink-muted"
       >
         {TYPE_OPTIONS.map((t) => (
           <option key={t.value} value={t.value}>
@@ -2435,39 +2435,39 @@ function NewItemForm({
         name="title"
         required
         placeholder="Title"
-        className="rounded-lg border border-rule bg-card px-2.5 py-1.5 text-[13px] outline-none focus:border-neutral-400"
+        className="rounded-lg border border-rule bg-card px-2.5 py-1.5 text-[13px] outline-none focus:border-ink-muted"
       />
       <textarea
         name="body"
         rows={3}
         placeholder={bodyLabelFor(type)}
-        className="rounded-lg border border-rule bg-card px-2.5 py-1.5 text-[13px] outline-none focus:border-neutral-400"
+        className="rounded-lg border border-rule bg-card px-2.5 py-1.5 text-[13px] outline-none focus:border-ink-muted"
       />
       {showAttribution && (
         <input
           type="text"
           name="attribution"
           placeholder="Attribution (interviewee, source, citation…)"
-          className="rounded-lg border border-rule bg-card px-2.5 py-1.5 text-[13px] outline-none focus:border-neutral-400"
+          className="rounded-lg border border-rule bg-card px-2.5 py-1.5 text-[13px] outline-none focus:border-ink-muted"
         />
       )}
       <input
         type="text"
         name="tags"
         placeholder="Tags, comma separated"
-        className="rounded-lg border border-rule bg-card px-2.5 py-1.5 text-[13px] outline-none focus:border-neutral-400"
+        className="rounded-lg border border-rule bg-card px-2.5 py-1.5 text-[13px] outline-none focus:border-ink-muted"
       />
-      <label className="flex flex-col gap-1 text-xs text-neutral-500">
+      <label className="flex flex-col gap-1 text-xs text-ink-secondary">
         Date
         <input
           type="date"
           name="date_start"
-          className="rounded-lg border border-rule bg-card px-2.5 py-1.5 text-[13px] outline-none focus:border-neutral-400"
+          className="rounded-lg border border-rule bg-card px-2.5 py-1.5 text-[13px] outline-none focus:border-ink-muted"
         />
       </label>
       <select
         name="layer_id"
-        className="rounded-lg border border-rule bg-card px-2.5 py-1.5 text-[13px] outline-none focus:border-neutral-400"
+        className="rounded-lg border border-rule bg-card px-2.5 py-1.5 text-[13px] outline-none focus:border-ink-muted"
         defaultValue=""
       >
         <option value="">No layer</option>
@@ -2479,7 +2479,7 @@ function NewItemForm({
       </select>
 
       {urlFirst && (
-        <label className="flex flex-col gap-1 text-xs text-neutral-500">
+        <label className="flex flex-col gap-1 text-xs text-ink-secondary">
           {type === "video" ? "Video link" : "Web address"}
           <input
             type="url"
@@ -2490,10 +2490,10 @@ function NewItemForm({
                 ? "https://youtube.com/watch?v=…"
                 : "https://…"
             }
-            className="rounded-lg border border-rule bg-card px-2.5 py-1.5 text-[13px] outline-none focus:border-neutral-400"
+            className="rounded-lg border border-rule bg-card px-2.5 py-1.5 text-[13px] outline-none focus:border-ink-muted"
           />
           {type === "video" && (
-            <span className="text-[11px] text-neutral-400">
+            <span className="text-[11px] text-ink-muted">
               YouTube and Vimeo links play in place. Anything else is kept as a
               link.
             </span>
@@ -2503,7 +2503,7 @@ function NewItemForm({
 
       {showMedia && (
         <>
-          <label className="flex flex-col gap-1 text-xs text-neutral-500">
+          <label className="flex flex-col gap-1 text-xs text-ink-secondary">
             Audio / video / document file
             <input
               type="file"
@@ -2516,13 +2516,13 @@ function NewItemForm({
             type="text"
             name="media_url"
             placeholder="or paste a link (YouTube, Vimeo, SoundCloud…)"
-            className="rounded-lg border border-rule bg-card px-2.5 py-1.5 text-[13px] outline-none focus:border-neutral-400"
+            className="rounded-lg border border-rule bg-card px-2.5 py-1.5 text-[13px] outline-none focus:border-ink-muted"
           />
         </>
       )}
 
       {showAudio && (
-        <label className="flex flex-col gap-1 text-xs text-neutral-500">
+        <label className="flex flex-col gap-1 text-xs text-ink-secondary">
           Recording
           <input
             type="file"
@@ -2530,7 +2530,7 @@ function NewItemForm({
             accept="audio/*"
             className="text-sm"
           />
-          <span className="text-[11px] text-neutral-400">
+          <span className="text-[11px] text-ink-muted">
             The sound itself. Describe it above as well &mdash; a recording
             without words is hard to search and impossible to skim.
           </span>
@@ -2538,7 +2538,7 @@ function NewItemForm({
       )}
 
       {showImage && (
-        <label className="flex flex-col gap-1 text-xs text-neutral-500">
+        <label className="flex flex-col gap-1 text-xs text-ink-secondary">
           {isCover ? "Cover image (optional)" : "Image"}
           <input
             type="file"
@@ -2551,13 +2551,13 @@ function NewItemForm({
       )}
 
       {checkingExif && (
-        <p className="text-xs text-neutral-400">Reading photo…</p>
+        <p className="text-xs text-ink-muted">Reading photo…</p>
       )}
       {photoNote && !checkingExif && (
-        <p className="text-xs text-neutral-500">{photoNote}</p>
+        <p className="text-xs text-ink-secondary">{photoNote}</p>
       )}
       {exifChecked && !checkingExif && !photoCoords && offerPhotoLocation && (
-        <p className="text-xs text-neutral-400">
+        <p className="text-xs text-ink-muted">
           No location data found in this photo.
         </p>
       )}
@@ -2590,7 +2590,7 @@ function NewItemForm({
         <button
           type="button"
           onClick={onCancel}
-          className="rounded px-3 py-1.5 text-sm text-neutral-500"
+          className="rounded px-3 py-1.5 text-sm text-ink-secondary"
         >
           Cancel
         </button>
@@ -2718,7 +2718,7 @@ function ItemDetail({
           onChange={handleLayerChange}
           disabled={savingLayer}
           aria-label="Layer"
-          className="flex-1 rounded-lg border border-rule bg-card px-2 py-1 label outline-none focus:border-neutral-400"
+          className="flex-1 rounded-lg border border-rule bg-card px-2 py-1 label outline-none focus:border-ink-muted"
         >
           <option value="">No layer</option>
           {layers.map((l) => (
@@ -2730,14 +2730,14 @@ function ItemDetail({
         <button
           onClick={onClose}
           aria-label="Close"
-          className="press rounded-full px-2 py-1 text-[13px] text-neutral-400 hover:bg-neutral-900/[0.06] hover:text-neutral-700"
+          className="press rounded-full px-2 py-1 text-[13px] text-ink-muted hover:bg-ink/[0.06] hover:text-ink"
         >
           ✕
         </button>
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <span className="w-fit rounded-full bg-neutral-900/[0.06] px-2 py-0.5 text-[11px] text-neutral-600">
+        <span className="w-fit rounded-full bg-ink/[0.06] px-2 py-0.5 text-[11px] text-ink-secondary">
           {TYPE_OPTIONS.find((t) => t.value === item.type)?.label ?? item.type}
         </span>
 
@@ -2755,7 +2755,7 @@ function ItemDetail({
             await updateItemCategoryAction(item.id, next === "" ? null : next);
             setSavingCategory(false);
           }}
-          className="label rounded-lg border border-rule bg-card px-2 py-0.5 outline-none focus:border-neutral-400"
+          className="label rounded-lg border border-rule bg-card px-2 py-0.5 outline-none focus:border-ink-muted"
         >
           <option value="">
             Auto &middot;{" "}
@@ -2780,7 +2780,7 @@ function ItemDetail({
       </h3>
 
       {item.attribution && (
-        <p className="text-[13px] italic leading-snug text-neutral-500">
+        <p className="text-[13px] italic leading-snug text-ink-secondary">
           — {item.attribution}
         </p>
       )}
@@ -2816,16 +2816,16 @@ function ItemDetail({
       })}
 
       {item.body && (
-        <p className="whitespace-pre-wrap text-sm text-neutral-700">
+        <p className="whitespace-pre-wrap text-sm text-ink">
           {item.body}
         </p>
       )}
 
       {item.date_start && (
-        <p className="text-xs text-neutral-400">{item.date_start}</p>
+        <p className="text-xs text-ink-muted">{item.date_start}</p>
       )}
 
-      <p className="text-xs text-neutral-400">
+      <p className="text-xs text-ink-muted">
         {item.created_by
           ? `Added by ${memberNames[item.created_by] ?? "a former member"}`
           : "Added before authorship was recorded"}
@@ -2833,7 +2833,7 @@ function ItemDetail({
 
       {item.geometry.type === "Point" ? (
         <div className="flex flex-col gap-0.5">
-          <p className="text-xs text-neutral-400">
+          <p className="text-xs text-ink-muted">
             {item.geometry.coordinates[1].toFixed(5)},{" "}
             {item.geometry.coordinates[0].toFixed(5)} — drag its marker to move
             it
@@ -2849,13 +2849,13 @@ function ItemDetail({
           {moveError && <p className="text-xs text-red-600">{moveError}</p>}
         </div>
       ) : (
-        <p className="text-xs text-neutral-400">
+        <p className="text-xs text-ink-muted">
           {item.geometry.type === "LineString" ? "Line" : "Region"} — drawn
           shapes can&apos;t be moved yet
         </p>
       )}
 
-      <label className="flex flex-col gap-1 text-xs text-neutral-500">
+      <label className="flex flex-col gap-1 text-xs text-ink-secondary">
         Tags
         <input
           type="text"
@@ -2863,17 +2863,17 @@ function ItemDetail({
           onChange={(e) => setTagsInput(e.target.value)}
           onBlur={handleTagsBlur}
           placeholder="comma, separated, tags"
-          className="rounded-lg border border-rule bg-card px-2.5 py-1.5 text-[13px] outline-none focus:border-neutral-400"
+          className="rounded-lg border border-rule bg-card px-2.5 py-1.5 text-[13px] outline-none focus:border-ink-muted"
         />
       </label>
 
-      <div className="flex flex-col gap-2 border-t border-neutral-200 pt-3">
+      <div className="flex flex-col gap-2 border-t border-rule pt-3">
         <p className="label">
           Linked items
         </p>
 
         {linked.length === 0 && (
-          <p className="text-sm text-neutral-400">
+          <p className="text-sm text-ink-muted">
             Not linked to anything yet.
           </p>
         )}
@@ -2895,14 +2895,14 @@ function ItemDetail({
                 >
                   <button
                     type="submit"
-                    className="text-xs text-neutral-400 underline hover:text-red-600"
+                    className="text-xs text-ink-muted underline hover:text-red-600"
                   >
                     Unlink
                   </button>
                 </form>
               </div>
               {link.note && (
-                <span className="text-xs text-neutral-500">{link.note}</span>
+                <span className="text-xs text-ink-secondary">{link.note}</span>
               )}
             </li>
           ))}
@@ -2912,7 +2912,7 @@ function ItemDetail({
           <div className="flex flex-col gap-2 pt-1">
             {selectedTarget ? (
               // Chosen: confirm what's being linked, and why.
-              <div className="flex flex-col gap-2 rounded border border-neutral-200 p-2">
+              <div className="flex flex-col gap-2 rounded border border-rule p-2">
                 <div className="flex items-start justify-between gap-2">
                   <span className="text-sm font-medium">
                     {selectedTarget.title || "Untitled"}
@@ -2922,7 +2922,7 @@ function ItemDetail({
                       setLinkTarget("");
                       setLinkError(null);
                     }}
-                    className="text-xs text-neutral-400 underline"
+                    className="text-xs text-ink-muted underline"
                   >
                     Change
                   </button>
@@ -2932,7 +2932,7 @@ function ItemDetail({
                   value={linkNote}
                   onChange={(e) => setLinkNote(e.target.value)}
                   placeholder="How are they related? (optional)"
-                  className="rounded-lg border border-rule bg-card px-2.5 py-1.5 text-[13px] outline-none focus:border-neutral-400"
+                  className="rounded-lg border border-rule bg-card px-2.5 py-1.5 text-[13px] outline-none focus:border-ink-muted"
                 />
                 <button
                   onClick={handleCreateLink}
@@ -2949,7 +2949,7 @@ function ItemDetail({
                   value={linkQuery}
                   onChange={(e) => setLinkQuery(e.target.value)}
                   placeholder="Link to… search by title, text, tag"
-                  className="rounded-lg border border-rule bg-card px-2.5 py-1.5 text-[13px] outline-none focus:border-neutral-400"
+                  className="rounded-lg border border-rule bg-card px-2.5 py-1.5 text-[13px] outline-none focus:border-ink-muted"
                 />
                 <ul className="flex max-h-48 flex-col overflow-y-auto">
                   {matchingCandidates.slice(0, 30).map((i) => (
@@ -2967,12 +2967,12 @@ function ItemDetail({
                   ))}
                 </ul>
                 {matchingCandidates.length === 0 && (
-                  <p className="text-sm text-neutral-400">
+                  <p className="text-sm text-ink-muted">
                     No items match “{linkQuery}”.
                   </p>
                 )}
                 {matchingCandidates.length > 30 && (
-                  <p className="text-xs text-neutral-400">
+                  <p className="text-xs text-ink-muted">
                     Showing the first 30 — keep typing to narrow.
                   </p>
                 )}
@@ -3021,7 +3021,7 @@ function BaseMapPanel({
 
   return (
     <div className="flex flex-col gap-3 p-4">
-      <p className="text-xs text-neutral-500">
+      <p className="text-xs text-ink-secondary">
         Overlay a custom (e.g. historical) map image, positioned by its
         corner coordinates. It renders on top of the standard base map.
       </p>
@@ -3044,44 +3044,44 @@ function BaseMapPanel({
       <form action={formAction} className="flex flex-col gap-2">
         <input type="file" name="image" accept="image/*" required className="text-sm" />
         <div className="grid grid-cols-2 gap-2">
-          <label className="flex flex-col gap-1 text-xs text-neutral-500">
+          <label className="flex flex-col gap-1 text-xs text-ink-secondary">
             North (lat)
             <input
               name="north"
               type="number"
               step="any"
               required
-              className="rounded-lg border border-rule bg-card px-2.5 py-1.5 text-[13px] outline-none focus:border-neutral-400"
+              className="rounded-lg border border-rule bg-card px-2.5 py-1.5 text-[13px] outline-none focus:border-ink-muted"
             />
           </label>
-          <label className="flex flex-col gap-1 text-xs text-neutral-500">
+          <label className="flex flex-col gap-1 text-xs text-ink-secondary">
             South (lat)
             <input
               name="south"
               type="number"
               step="any"
               required
-              className="rounded-lg border border-rule bg-card px-2.5 py-1.5 text-[13px] outline-none focus:border-neutral-400"
+              className="rounded-lg border border-rule bg-card px-2.5 py-1.5 text-[13px] outline-none focus:border-ink-muted"
             />
           </label>
-          <label className="flex flex-col gap-1 text-xs text-neutral-500">
+          <label className="flex flex-col gap-1 text-xs text-ink-secondary">
             West (lng)
             <input
               name="west"
               type="number"
               step="any"
               required
-              className="rounded-lg border border-rule bg-card px-2.5 py-1.5 text-[13px] outline-none focus:border-neutral-400"
+              className="rounded-lg border border-rule bg-card px-2.5 py-1.5 text-[13px] outline-none focus:border-ink-muted"
             />
           </label>
-          <label className="flex flex-col gap-1 text-xs text-neutral-500">
+          <label className="flex flex-col gap-1 text-xs text-ink-secondary">
             East (lng)
             <input
               name="east"
               type="number"
               step="any"
               required
-              className="rounded-lg border border-rule bg-card px-2.5 py-1.5 text-[13px] outline-none focus:border-neutral-400"
+              className="rounded-lg border border-rule bg-card px-2.5 py-1.5 text-[13px] outline-none focus:border-ink-muted"
             />
           </label>
         </div>

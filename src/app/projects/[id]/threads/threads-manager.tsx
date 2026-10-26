@@ -78,7 +78,7 @@ export function ThreadsManager({
   return (
     <div className="flex flex-col gap-8">
       <section className="flex flex-col gap-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-500">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-secondary">
           Threads
         </h2>
 
@@ -123,7 +123,7 @@ export function ThreadsManager({
       </section>
 
       <section className="flex flex-col gap-3 border-t border-rule pt-6">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-500">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-secondary">
           New thread
         </h2>
         <form action={formAction} className="flex flex-col gap-2">
@@ -132,13 +132,13 @@ export function ThreadsManager({
             name="name"
             required
             placeholder="e.g. The walk along the wadi"
-            className="rounded-md border border-rule bg-card px-3 py-2 text-sm outline-none focus:border-neutral-400"
+            className="rounded-md border border-rule bg-card px-3 py-2 text-sm outline-none focus:border-ink-muted"
           />
           <textarea
             name="description"
             rows={2}
             placeholder="What does this tour show? (optional)"
-            className="rounded-md border border-rule bg-card px-3 py-2 text-sm outline-none focus:border-neutral-400"
+            className="rounded-md border border-rule bg-card px-3 py-2 text-sm outline-none focus:border-ink-muted"
           />
           <button
             type="submit"
@@ -206,14 +206,14 @@ function ThreadEditor({
           name="name"
           defaultValue={thread.name}
           required
-          className="rounded border border-neutral-300 px-2 py-1.5 text-sm"
+          className="rounded border border-rule px-2 py-1.5 text-sm"
         />
         <textarea
           name="description"
           defaultValue={thread.description ?? ""}
           rows={2}
           placeholder="Description (optional)"
-          className="rounded border border-neutral-300 px-2 py-1.5 text-sm"
+          className="rounded border border-rule px-2 py-1.5 text-sm"
         />
         <div className="flex items-center gap-3">
           <button
@@ -233,7 +233,7 @@ function ThreadEditor({
       </form>
 
       <div className="flex flex-col gap-2">
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-ink-secondary">
           Steps
         </h3>
 
@@ -297,7 +297,7 @@ function ThreadEditor({
       </div>
 
       <div className="flex flex-col gap-2">
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-ink-secondary">
           Add a step
         </h3>
         <input
@@ -305,7 +305,7 @@ function ThreadEditor({
           value={addQuery}
           onChange={(e) => setAddQuery(e.target.value)}
           placeholder="Search items by title…"
-          className="rounded border border-neutral-300 px-2 py-1.5 text-sm"
+          className="rounded border border-rule px-2 py-1.5 text-sm"
         />
         {candidates.length === 0 ? (
           <p className="text-sm text-ink-muted">
@@ -378,7 +378,7 @@ function MoveButton({
       <button
         type="submit"
         disabled={disabled}
-        className="rounded border border-neutral-300 px-1.5 text-xs disabled:opacity-30"
+        className="rounded border border-rule px-1.5 text-xs disabled:opacity-30"
       >
         {label}
       </button>
@@ -429,7 +429,7 @@ function NarrationField({
         onBlur={save}
         rows={2}
         placeholder="What should a reader be told at this stop?"
-        className="rounded border border-neutral-300 px-2 py-1 text-sm"
+        className="rounded border border-rule px-2 py-1 text-sm"
       />
       <div className="flex items-center gap-3">
         {dirty && (

@@ -55,7 +55,7 @@ export default async function ThreadsPage({
     return (
       <main className="mx-auto flex min-h-screen max-w-3xl flex-col justify-center gap-4 px-6">
         <h1 className="display text-lg">Couldn&apos;t load threads</h1>
-        <pre className="overflow-x-auto rounded bg-neutral-100 p-3 text-xs">
+        <pre className="overflow-x-auto rounded bg-paper p-3 text-xs">
           {loadError.message}
         </pre>
         <Link href={`/projects/${id}`} className="text-sm underline">
@@ -85,14 +85,14 @@ export default async function ThreadsPage({
       <div className="flex items-center gap-3">
         <Link
           href={`/projects/${project.id}`}
-          className="text-sm text-neutral-500 underline"
+          className="text-sm text-ink-secondary underline"
         >
           ← Map
         </Link>
         <h1 className="display text-xl">{project.name} — Threads</h1>
       </div>
 
-      <p className="text-sm text-neutral-600">
+      <p className="text-sm text-ink-secondary">
         A thread orders a subset of your items into a guided sequence, with a
         line of narration for each step. Readers of the published map get the
         thread as a tour they can play through.

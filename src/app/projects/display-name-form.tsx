@@ -27,7 +27,7 @@ export function DisplayNameForm({
           defaultValue={displayName ?? ""}
           maxLength={40}
           placeholder={email.split("@")[0]}
-          className="flex-1 rounded border border-neutral-300 px-2 py-1.5 text-sm"
+          className="flex-1 rounded border border-rule px-2 py-1.5 text-sm"
         />
         <button
           type="submit"

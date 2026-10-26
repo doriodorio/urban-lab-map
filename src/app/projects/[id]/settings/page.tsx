@@ -102,13 +102,13 @@ export default async function ProjectSettingsPage({
       <div className="flex items-center gap-4">
         <Link
           href={`/projects/${project.id}`}
-          className="text-sm text-neutral-500 underline"
+          className="text-sm text-ink-secondary underline"
         >
           ← Map
         </Link>
         <Link
           href={`/projects/${project.id}/threads`}
-          className="text-sm text-neutral-500 underline"
+          className="text-sm text-ink-secondary underline"
         >
           Threads
         </Link>
@@ -127,7 +127,7 @@ export default async function ProjectSettingsPage({
       </section>
 
       <section className="flex flex-col gap-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-500">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-secondary">
           Publishing
         </h2>
         <PublishControls
@@ -138,7 +138,7 @@ export default async function ProjectSettingsPage({
       </section>
 
       <section className="flex flex-col gap-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-500">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-secondary">
           Members
         </h2>
         <ul className="flex flex-col gap-2">
@@ -157,7 +157,7 @@ export default async function ProjectSettingsPage({
                   member.email
                 )}
                 {member.role === "instructor" && (
-                  <span className="ml-2 rounded bg-neutral-100 px-1.5 py-0.5 text-xs text-neutral-500">
+                  <span className="ml-2 rounded bg-paper px-1.5 py-0.5 text-xs text-ink-secondary">
                     instructor
                   </span>
                 )}

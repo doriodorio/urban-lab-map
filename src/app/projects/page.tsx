@@ -115,7 +115,7 @@ export default async function ProjectsPage() {
                 <li key={project.id}>
                   <Link
                     href={`/projects/${project.id}`}
-                    className="flex items-baseline gap-4 py-3.5 hover:bg-neutral-900/[0.03]"
+                    className="flex items-baseline gap-4 py-3.5 hover:bg-ink/[0.03]"
                   >
                     <span className="flex-1">
                       <span className="block text-sm font-medium">
