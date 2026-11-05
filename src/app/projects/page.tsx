@@ -74,12 +74,17 @@ export default async function ProjectsPage() {
 
       <div className="flex items-center justify-between border-t border-rule pt-4">
         <p className="text-sm text-ink-secondary">Signed in as {user.email}</p>
-        <Link
-          href="/projects/new"
-          className="press rounded-md bg-ink px-3 py-1.5 text-sm font-medium text-white"
-        >
-          New project
-        </Link>
+        <div className="flex items-center gap-4">
+          <Link href="/projects/import" className="text-sm text-ink underline">
+            Import a semester
+          </Link>
+          <Link
+            href="/projects/new"
+            className="press rounded-md bg-ink px-3 py-1.5 text-sm font-medium text-white"
+          >
+            New project
+          </Link>
+        </div>
       </div>
 
       <div className="flex flex-col gap-1 rounded-md border border-rule bg-card p-3">
