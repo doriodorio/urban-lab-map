@@ -11,15 +11,24 @@ import { createClient } from "@/lib/supabase/client";
  * nothing from the query string is rendered, so a crafted link cannot put
  * words on the sign-in page.
  */
+const NOTICES: Record<string, string> = {
+  expired:
+    "That sign-in link had expired. Links last about an hour — send a fresh one below.",
+  used: "That sign-in link had already been used. Each one works once — send a fresh one below.",
+  // The failure that looks like a broken app and is not one.
+  verifier:
+    "That link was opened in a different browser from the one that asked for it, which is the one thing a sign-in link cannot survive. Ask for a new link below, in this browser, and open it here.",
+  failed: "That sign-in link couldn't be used. Send a fresh one below.",
+};
+
 function CallbackNotice() {
   const reason = useSearchParams().get("reason");
-  if (reason !== "expired" && reason !== "failed") return null;
+  const notice = reason ? NOTICES[reason] : undefined;
+  if (!notice) return null;
 
   return (
     <p className="border-l-2 border-rule pl-3 text-sm text-ink-secondary">
-      {reason === "expired"
-        ? "That sign-in link had expired or was already used. Links last about an hour and work once — send a fresh one below."
-        : "That sign-in link couldn't be used. Send a fresh one below."}
+      {notice}
     </p>
   );
 }
