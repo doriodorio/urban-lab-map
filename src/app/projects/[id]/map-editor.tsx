@@ -20,6 +20,8 @@ import {
 import {
   MAP_STYLES,
   DEFAULT_STYLE_ID,
+  DEFAULT_CENTER,
+  DEFAULT_ZOOM,
   findStyle,
   buildRasterStyle,
   RASTER_ATTRIBUTION,
@@ -75,7 +77,6 @@ type BoundAction = (
   formData: FormData
 ) => Promise<ActionResult>;
 
-const DEFAULT_CENTER: [number, number] = [34.78, 32.07]; // Tel Aviv-ish, reasonable default for Bezalel
 
 // Idempotent: safe to call from multiple effects regardless of ordering, so
 // nothing that needs these sources ever silently no-ops because it ran
@@ -549,17 +550,16 @@ export function MapEditor({
     ensureRtlTextSupport();
 
     const initial = findStyle(mapStyleId);
-    // Open on the project's own extent rather than a fixed point in Tel Aviv.
-    // The perimeter already works this out, and it carries a margin, so the
-    // material sits inside the frame instead of touching its edges. A project
-    // with nothing in it yet falls back to the default view - there is no
-    // extent to fit.
+    // Open on the project's own extent. The perimeter already works this out,
+    // and it carries a margin, so the material sits inside the frame instead
+    // of touching its edges. A project with nothing in it yet has no extent to
+    // fit, and opens on the city the course works in.
     const opening = projectPerimeter(items.map((i) => i.geometry));
     const map = new maplibregl.Map({
       container: mapContainer.current,
       style: initial.kind === "vector" ? initial.url : buildRasterStyle(initial),
       center: DEFAULT_CENTER,
-      zoom: 12,
+      zoom: DEFAULT_ZOOM,
       ...(opening
         ? {
             bounds: [

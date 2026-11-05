@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import {
   MAP_STYLES,
   DEFAULT_STYLE_ID,
+  DEFAULT_CENTER,
+  DEFAULT_ZOOM,
   findStyle,
   buildRasterStyle,
   initialStyle,
@@ -63,7 +65,6 @@ type ThreadItem = {
 };
 
 const UNASSIGNED_COLOR = "#737373";
-const DEFAULT_CENTER: [number, number] = [34.78, 32.07];
 
 // Apple's projection from the Designing Fluid Interfaces sample code: where a
 // flick would come to rest, given its release velocity. Deliberately the
@@ -307,7 +308,7 @@ export function PublicViewer({
       container: mapContainer.current,
       style: initialStyle(project.base_map_style ?? DEFAULT_STYLE_ID),
       center: DEFAULT_CENTER,
-      zoom: 12,
+      zoom: DEFAULT_ZOOM,
       ...(opening
         ? {
             bounds: [

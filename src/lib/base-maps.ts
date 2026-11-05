@@ -65,6 +65,22 @@ export const MAP_STYLES: MapStyle[] = [
 
 export const DEFAULT_STYLE_ID = "streets";
 
+/**
+ * Where the map opens when the project has nothing to open on.
+ *
+ * Jerusalem, because that is the city this course works in - the track is at
+ * Bezalel and the fieldwork is done on foot from there. An empty project is a
+ * project on its first morning, and landing it on the right city means the
+ * first item can be placed by panning rather than by searching.
+ *
+ * It is only a starting view. Nothing is anchored to it, and the moment a
+ * project has one item the perimeter takes over and this is never used again.
+ */
+export const DEFAULT_CENTER: [number, number] = [35.2137, 31.7683];
+
+/** City-wide: the group's site could be anywhere in it. */
+export const DEFAULT_ZOOM = 12;
+
 // Only covers the raster sources. Vector styles carry their own attribution
 // in the style document, which MapLibre picks up automatically.
 export const RASTER_ATTRIBUTION =
