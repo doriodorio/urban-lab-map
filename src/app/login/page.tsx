@@ -12,8 +12,10 @@ import { createClient } from "@/lib/supabase/client";
  * words on the sign-in page.
  */
 const NOTICES: Record<string, string> = {
+  // Asking again is the commonest way a link dies, and the least obvious: the
+  // inbox still shows the old mail, looking perfectly valid.
   expired:
-    "That sign-in link had expired. Links last about an hour — send a fresh one below.",
+    "That sign-in link had expired. Links last about an hour, and asking for a new one retires the old one immediately — so open the newest mail in your inbox, or send another below.",
   used: "That sign-in link had already been used. Each one works once — send a fresh one below.",
   // The failure that looks like a broken app and is not one.
   verifier:
