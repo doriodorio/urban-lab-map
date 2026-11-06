@@ -12,6 +12,7 @@ import {
 } from "@/lib/base-maps";
 import { ensureRtlTextSupport } from "@/lib/rtl-text";
 import { itemCategory, itemGroup, CATEGORIES } from "@/lib/categories";
+import { markStyle, surveyedGeometries } from "@/lib/placement";
 import {
   projectPerimeter,
   ensurePerimeterLayers,
@@ -248,7 +249,7 @@ export function PublicViewer({
   // Built from every item, not the filtered set: the perimeter is the extent
   // of the project, and hiding a layer should not shrink the study area.
   const perimeter = showPerimeter
-    ? projectPerimeter(items.map((i) => i.geometry))
+    ? projectPerimeter(surveyedGeometries(items))
     : null;
 
   useEffect(() => {
@@ -303,7 +304,7 @@ export function PublicViewer({
     // Open on the project's extent, the same as the editor does: a visitor
     // should land on the project, not on a default point they have to find
     // their way from.
-    const opening = projectPerimeter(items.map((i) => i.geometry));
+    const opening = projectPerimeter(surveyedGeometries(items));
     const map = new maplibregl.Map({
       container: mapContainer.current,
       style: initialStyle(project.base_map_style ?? DEFAULT_STYLE_ID),
@@ -432,23 +433,15 @@ export function PublicViewer({
       if (!marker) {
         const el = document.createElement("button");
         el.type = "button";
-        // Filled circle: a photograph's own GPS put it here. Hollow circle:
-        // it came from such a photograph and was then moved, so the picture is
-        // still evidence while the position is someone's judgement. Square:
-        // placed by hand, or a photograph with no GPS - which is also every
-        // item recorded before this was tracked.
-        const located = item.located_by;
-        const round = located === "photo" || located === "moved";
-        const size = round ? "16px" : "14px";
-        el.style.width = size;
-        el.style.height = size;
-        el.style.borderRadius = round ? "50%" : "2px";
-        el.style.border =
-          located === "moved"
-            ? `2px solid ${layerColor(item.layer_id)}`
-            : "2px solid white";
-        el.style.background =
-          located === "moved" ? "#ffffff" : layerColor(item.layer_id);
+        // What each shape means lives in lib/placement, shared with the
+        // editor, so a reader and the group who made the map are never
+        // looking at the same mark with two different meanings.
+        const mark = markStyle(item.located_by, layerColor(item.layer_id));
+        el.style.width = `${mark.size}px`;
+        el.style.height = `${mark.size}px`;
+        el.style.borderRadius = mark.borderRadius;
+        el.style.border = mark.border;
+        el.style.background = mark.background;
         el.style.boxShadow = "0 0 0 1px rgba(0,0,0,0.3)";
         el.style.cursor = "pointer";
         const itemId = item.id;
@@ -466,11 +459,9 @@ export function PublicViewer({
       // Re-applied on every render because a layer's colour can change under
       // it. A moved item keeps its colour in the ring rather than the fill, so
       // this has to respect the shape rather than paint over it.
-      const moved = item.located_by === "moved";
-      el.style.background = moved ? "#ffffff" : layerColor(item.layer_id);
-      el.style.border = moved
-        ? `2px solid ${layerColor(item.layer_id)}`
-        : "2px solid white";
+      const repaint = markStyle(item.located_by, layerColor(item.layer_id));
+      el.style.background = repaint.background;
+      el.style.border = repaint.border;
       el.style.display = visible(item) ? "block" : "none";
       // Highlight the current tour stop so the map matches the narration.
       el.style.transform =

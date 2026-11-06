@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { asPlacement } from "@/lib/placement";
 import { createClient } from "@/lib/supabase/server";
 import { MAP_STYLES } from "@/lib/base-maps";
 import { CATEGORIES } from "@/lib/categories";
@@ -251,9 +252,11 @@ export async function createItem(
   const image = formData.get("image") as File | null;
   const mediaFile = formData.get("media_file") as File | null;
   const mediaUrl = (formData.get("media_url") as string)?.trim() || null;
-  const claimed = formData.get("located_by") as string;
-  const locatedBy =
-    claimed === "photo" || claimed === "moved" ? claimed : null;
+  // 'surveyed' and 'about' come from the question the form asks when the
+  // photograph has not answered for itself; 'photo' and 'moved' come from the
+  // EXIF read. Anything else is discarded rather than stored, so the column
+  // can only ever hold a claim this app knows how to draw.
+  const locatedBy = asPlacement(formData.get("located_by"));
 
   if (!title) {
     return { error: "Title is required." };

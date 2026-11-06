@@ -13,6 +13,11 @@ import {
   itemCategory,
 } from "@/lib/categories";
 import {
+  asksPlacement,
+  markStyle,
+  surveyedGeometries,
+} from "@/lib/placement";
+import {
   projectPerimeter,
   ensurePerimeterLayers,
   perimeterFeatures,
@@ -351,18 +356,14 @@ function paintMarker(
   const { stacked, color, angle, located } = opts;
   if (!stacked) {
     el.replaceChildren();
-    const round = located === "photo" || located === "moved";
-    // A square reads as larger than a circle of the same width, so it is drawn
-    // slightly smaller to sit level with its neighbours in a mixed set.
-    const size = round ? 16 : 14;
-    el.style.width = `${size}px`;
-    el.style.height = `${size}px`;
-    el.style.borderRadius = round ? "50%" : "2px";
-    // Hollow: the layer's colour becomes the ring rather than the fill, so an
-    // emptied mark is still legibly its layer's.
-    el.style.border =
-      located === "moved" ? `2px solid ${color}` : "2px solid white";
-    el.style.background = located === "moved" ? "#ffffff" : color;
+    // Shared with the published view, so a shape cannot come to mean one
+    // thing in the editor and another to a reader.
+    const mark = markStyle(located, color);
+    el.style.width = `${mark.size}px`;
+    el.style.height = `${mark.size}px`;
+    el.style.borderRadius = mark.borderRadius;
+    el.style.border = mark.border;
+    el.style.background = mark.background;
     el.style.boxShadow = "0 0 0 1px rgba(0,0,0,0.3)";
     return;
   }
@@ -596,7 +597,7 @@ export function MapEditor({
     // and it carries a margin, so the material sits inside the frame instead
     // of touching its edges. A project with nothing in it yet has no extent to
     // fit, and opens on the city the course works in.
-    const opening = projectPerimeter(items.map((i) => i.geometry));
+    const opening = projectPerimeter(surveyedGeometries(items));
     const map = new maplibregl.Map({
       container: mapContainer.current,
       style: initial.kind === "vector" ? initial.url : buildRasterStyle(initial),
@@ -977,7 +978,7 @@ export function MapEditor({
   // it is the extent of the project, not of whatever the filters leave showing.
   // Hiding a layer should not shrink the study area.
   const perimeter = showPerimeter
-    ? projectPerimeter(items.map((i) => i.geometry))
+    ? projectPerimeter(surveyedGeometries(items))
     : null;
 
   useEffect(() => {
@@ -1312,7 +1313,7 @@ export function MapEditor({
             items={items}
             showPerimeter={showPerimeter}
             onTogglePerimeter={() => setShowPerimeter((on) => !on)}
-            hasPerimeter={Boolean(projectPerimeter(items.map((i) => i.geometry)))}
+            hasPerimeter={Boolean(projectPerimeter(surveyedGeometries(items)))}
           />
         )}
 
@@ -2503,6 +2504,11 @@ function NewItemForm({
   const [title, setTitle] = useState("");
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [mediaUrl, setMediaUrl] = useState("");
+  // What the coordinate means, when the photograph has not already said.
+  // Starts unanswered on purpose: defaulting it to "found here" would make
+  // the honest answer the one that costs a click, and the whole value of the
+  // field is that it was actually answered.
+  const [claim, setClaim] = useState<"surveyed" | "about" | null>(null);
   const [photoCoords, setPhotoCoords] = useState<[number, number] | null>(
     null
   );
@@ -2583,10 +2589,12 @@ function NewItemForm({
   // What the button is waiting for. A grey button on its own is a dead end -
   // it is pressed, nothing happens, and nothing on the screen says why - so
   // the same check that greys it writes the line underneath it.
+  const askPlacement = asksPlacement(type, locatedBy);
   const missing = [
     title.trim() ? null : "a title",
     requiresImage(type) && !imageFile ? "an image file" : null,
     urlFirst && !mediaUrl.trim() ? "a link" : null,
+    askPlacement && !claim ? "what this pin means" : null,
   ].filter((m): m is string => m !== null);
   const ready = missing.length === 0;
 
@@ -2699,8 +2707,8 @@ function NewItemForm({
         New item — {geometryLabel(geometry)}
       </p>
       <input type="hidden" name="geometry" value={JSON.stringify(geometry)} />
-      {locatedBy && (
-        <input type="hidden" name="located_by" value={locatedBy} />
+      {(locatedBy ?? claim) && (
+        <input type="hidden" name="located_by" value={locatedBy ?? claim!} />
       )}
       <input type="hidden" name="type" value={type} />
 
@@ -2742,6 +2750,47 @@ function NewItemForm({
       {primary === "media" && mediaBlock}
       {primary === "audio" && audioBlock}
       {primary === "image" && imageBlock}
+
+      {/* Asked at the moment of entry, because nobody can reconstruct it in
+          March. Required, and with nothing pre-selected: a default of "found
+          here" would make the honest answer the one that costs a click. */}
+      {askPlacement && (
+        <fieldset className="rounded-lg border border-rule bg-card px-2.5 py-2">
+          <legend className="label px-1">
+            This pin
+            <RequiredMark />
+          </legend>
+          <div className="flex flex-col gap-1.5">
+            {(
+              [
+                ["surveyed", "Found here", "Recorded at this spot."],
+                [
+                  "about",
+                  "About here",
+                  "Refers to this place. Made somewhere else.",
+                ],
+              ] as const
+            ).map(([value, label, hint]) => (
+              <label
+                key={value}
+                className="flex cursor-pointer items-start gap-2 text-[13px]"
+              >
+                <input
+                  type="radio"
+                  name="placement_claim"
+                  checked={claim === value}
+                  onChange={() => setClaim(value)}
+                  className="mt-[3px]"
+                />
+                <span className="flex flex-col">
+                  <span className="text-ink">{label}</span>
+                  <span className="text-[11px] text-ink-muted">{hint}</span>
+                </span>
+              </label>
+            ))}
+          </div>
+        </fieldset>
+      )}
 
       <textarea
         name="body"
