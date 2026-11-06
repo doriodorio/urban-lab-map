@@ -45,6 +45,24 @@ const GUTTER = 18;
 const STEP = 22;
 /** Below the corner, so the first mark clears the perimeter's own line. */
 const DROP = 14;
+/**
+ * How much room the column needs on its left, and how close to any edge it
+ * may come. A mark is right-aligned on its anchor with its title running back
+ * from it, so the anchor needs a label's width of canvas behind it.
+ */
+const COLUMN_WIDTH = 188;
+const EDGE = 8;
+/** Half a mark's height: a mark is centred on its anchor, not hung below it. */
+const HALF = 11;
+/**
+ * Kept clear at the foot of the canvas for the drawing tools, which sit in
+ * the bottom-left - the same corner the column is drawn from.
+ */
+const TOOLBAR = 66;
+
+function clamp(value: number, low: number, high: number): number {
+  return Math.min(Math.max(value, low), Math.max(low, high));
+}
 
 export type MarginSlot = MarginEntry & { x: number; y: number };
 
@@ -91,11 +109,35 @@ export function useMarginColumn(
               x: 220,
               y: canvas.clientHeight - 60 - (entries.length - 1) * STEP,
             };
+
+        // The corner is a geographic point, so nothing keeps it on screen -
+        // and the usual case is the worst one. Opening a project fits the
+        // view to its items, which leaves the perimeter filling the canvas
+        // with no white space outside it to put a margin in, so the column
+        // lands past the left edge and cannot even be clicked.
+        //
+        // So the corner is where the column wants to be, not where it has to
+        // be: it is held inside the canvas, and when the corner leaves the
+        // view the column stays at the edge rather than following it out.
+        // Overlapping the map a little is a smaller lie than vanishing - the
+        // material is still in the project either way, and a reader who
+        // cannot see it has been told something false about what was
+        // gathered.
+        const width = canvas.clientWidth;
+        const height = canvas.clientHeight;
+        const last = (entries.length - 1) * STEP;
+        const x = clamp(at.x, COLUMN_WIDTH, width - EDGE);
+        const y = clamp(
+          at.y,
+          EDGE + HALF,
+          height - TOOLBAR - HALF - last
+        );
+
         setSlots(
           entries.map((entry, i) => ({
             ...entry,
-            x: at.x,
-            y: at.y + i * STEP,
+            x,
+            y: y + i * STEP,
           }))
         );
       });
