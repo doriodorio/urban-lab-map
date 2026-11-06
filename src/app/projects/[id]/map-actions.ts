@@ -396,6 +396,44 @@ export async function updateItemTags(
   return { success: true };
 }
 
+/**
+ * Fix an item's title.
+ *
+ * Open to any project member, unlike the link edit below. A title is a
+ * description someone wrote of the material, not the material itself: a typo
+ * in it is a shared problem, and the person who can see it is often not the
+ * person who made it. The uploaded file is untouched - it is stored under a
+ * generated name precisely so that nothing user-facing depends on it.
+ *
+ * Validated exactly as creation validates it, and no more: required, trimmed,
+ * no length limit. A cap here and not there would let a student save a title
+ * they could then never edit.
+ */
+export async function updateItemTitle(
+  projectId: string,
+  itemId: string,
+  title: string
+): Promise<ActionResult> {
+  const trimmed = title.trim();
+  if (!trimmed) {
+    return { error: "Title is required." };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("items")
+    .update({ title: trimmed, updated_at: new Date().toISOString() })
+    .eq("id", itemId)
+    .eq("project_id", projectId);
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  revalidatePath(`/projects/${projectId}`);
+  return { success: true };
+}
+
 export async function updateItemLayer(
   projectId: string,
   itemId: string,

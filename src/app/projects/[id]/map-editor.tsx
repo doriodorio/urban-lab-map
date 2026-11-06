@@ -414,6 +414,7 @@ export function MapEditor({
   purgeItemAction,
   updateItemLayerAction,
   updateItemUrlAction,
+  updateItemTitleAction,
   updateItemCategoryAction,
   updateItemTagsAction,
   updateItemGeometryAction,
@@ -446,6 +447,10 @@ export function MapEditor({
     layerId: string | null
   ) => Promise<ActionResult>;
   updateItemUrlAction: (itemId: string, url: string) => Promise<ActionResult>;
+  updateItemTitleAction: (
+    itemId: string,
+    title: string
+  ) => Promise<ActionResult>;
   updateItemCategoryAction: (
     itemId: string,
     category: string | null
@@ -1452,6 +1457,7 @@ export function MapEditor({
             deleteItemAction={deleteItemAction}
             updateItemLayerAction={updateItemLayerAction}
             updateItemUrlAction={updateItemUrlAction}
+            updateItemTitleAction={updateItemTitleAction}
             updateItemCategoryAction={updateItemCategoryAction}
             currentUserId={currentUserId}
             updateItemTagsAction={updateItemTagsAction}
@@ -1736,6 +1742,121 @@ function LayerPanel({
  * server enforces the same rule, so this only spares people a button that
  * would refuse them.
  */
+/**
+ * The item's title, editable in place.
+ *
+ * Until now a title was fixed at creation, and the only way to fix a typo was
+ * to delete the item and upload the file again. The title is the only
+ * description most items carry - the stored file is named by a generated id,
+ * so nothing else says what the material is - which makes a wrong one costly
+ * rather than untidy.
+ *
+ * It stays a heading until asked, so the panel reads as a record and not as a
+ * form; the same restraint the link edit shows.
+ */
+function EditableTitle({
+  title,
+  onSave,
+}: {
+  title: string;
+  onSave: (next: string) => Promise<string | null>;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(title);
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  async function save() {
+    const next = draft.trim();
+    if (!next || next === title) {
+      setEditing(false);
+      setDraft(title);
+      return;
+    }
+    setSaving(true);
+    const message = await onSave(next);
+    setSaving(false);
+    if (message) setError(message);
+    else setEditing(false);
+  }
+
+  if (editing) {
+    return (
+      <div className="flex flex-col gap-1.5">
+        <label className="label" htmlFor="item-title">
+          Title
+        </label>
+        <input
+          id="item-title"
+          type="text"
+          value={draft}
+          autoFocus
+          disabled={saving}
+          onChange={(e) => {
+            setDraft(e.target.value);
+            setError(null);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              save();
+            }
+            // Escape abandons the edit. Without it the only way out of the
+            // field is to restore the old text by hand.
+            if (e.key === "Escape") {
+              setDraft(title);
+              setError(null);
+              setEditing(false);
+            }
+          }}
+          className="display w-full rounded-lg border border-rule bg-card px-2.5 py-1.5 text-[18px] leading-[1.15] outline-none focus:border-ink-muted"
+        />
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            disabled={saving || !draft.trim() || draft.trim() === title}
+            onClick={save}
+            className="press rounded-md bg-ink px-3.5 py-1 text-[12px] font-medium text-white disabled:opacity-40"
+          >
+            {saving ? "Saving…" : "Save title"}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setDraft(title);
+              setError(null);
+              setEditing(false);
+            }}
+            className="press rounded-md px-3 py-1 text-[12px] text-ink-muted hover:text-ink"
+          >
+            Cancel
+          </button>
+        </div>
+        {!draft.trim() && (
+          <p className="text-[11px] text-ink-muted">A title is required.</p>
+        )}
+        {error && <p className="text-[12px] text-red-600">{error}</p>}
+      </div>
+    );
+  }
+
+  return (
+    <div className="group/title flex items-start gap-2">
+      <h3 className="display flex-1 text-[18px] leading-[1.15]">{title}</h3>
+      <button
+        type="button"
+        onClick={() => {
+          setDraft(title);
+          setEditing(true);
+        }}
+        className="press label mt-1 shrink-0 opacity-0 transition-opacity hover:text-ink focus:opacity-100 group-hover/title:opacity-100"
+      >
+        Rename
+      </button>
+    </div>
+  );
+}
+
 function EmbeddedLink({
   url,
   onSave,
@@ -2959,6 +3080,7 @@ function ItemDetail({
   deleteItemAction,
   updateItemLayerAction,
   updateItemUrlAction,
+  updateItemTitleAction,
   updateItemCategoryAction,
   updateItemTagsAction,
   createItemLinkAction,
@@ -2981,6 +3103,10 @@ function ItemDetail({
     layerId: string | null
   ) => Promise<ActionResult>;
   updateItemUrlAction: (itemId: string, url: string) => Promise<ActionResult>;
+  updateItemTitleAction: (
+    itemId: string,
+    title: string
+  ) => Promise<ActionResult>;
   updateItemCategoryAction: (
     itemId: string,
     category: string | null
@@ -3121,9 +3247,13 @@ function ItemDetail({
         )}
       </div>
 
-      <h3 className="display text-[18px] leading-[1.15]">
-        {item.title}
-      </h3>
+      <EditableTitle
+        title={item.title || "Untitled"}
+        onSave={async (next) => {
+          const result = await updateItemTitleAction(item.id, next);
+          return result?.error ?? null;
+        }}
+      />
 
       {item.attribution && (
         <p className="text-[13px] italic leading-snug text-ink-secondary">

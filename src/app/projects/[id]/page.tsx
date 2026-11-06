@@ -14,6 +14,7 @@ import {
   updateItemLayer,
   updateItemCategory,
   updateItemUrl,
+  updateItemTitle,
   updateItemTags,
   updateItemGeometry,
   createItemLink,
@@ -167,6 +168,7 @@ export default async function ProjectMapPage({
       updateItemLayerAction={updateItemLayer.bind(null, project.id)}
       updateItemCategoryAction={updateItemCategory.bind(null, project.id)}
       updateItemUrlAction={updateItemUrl.bind(null, project.id)}
+      updateItemTitleAction={updateItemTitle.bind(null, project.id)}
       updateItemTagsAction={updateItemTags.bind(null, project.id)}
       updateItemGeometryAction={updateItemGeometry.bind(null, project.id)}
       createItemLinkAction={createItemLink.bind(null, project.id)}
