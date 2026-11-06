@@ -188,6 +188,33 @@ function requiresImage(type: string) {
   return type === "image";
 }
 
+/**
+ * The field that carries each type's substance, where that substance is an
+ * upload or a link rather than words. It is asked for directly under the
+ * title: those two together are the item, and the fields below them -
+ * caption, attribution, tags, date, layer - all describe something that has
+ * to exist first.
+ *
+ * Interview is deliberately absent. Its substance is as often a transcript
+ * typed into the body as it is a recording, so its file stays down with the
+ * optional fields rather than opening the form with a demand.
+ *
+ * A cover image is never a substance - it illustrates a note or a citation
+ * that stands perfectly well without it - so on sound, smell, touch, text
+ * and document it stays below even though those types' own file has moved
+ * up.
+ */
+const PRIMARY_FIELD: Record<string, "image" | "audio" | "media" | "url"> = {
+  image: "image",
+  // Mixed, but the picture is what a composite is usually built around, and
+  // it is the one field that can also place the item.
+  composite: "image",
+  sound: "audio",
+  document: "media",
+  link: "url",
+  video: "url",
+};
+
 function bodyLabelFor(type: string) {
   return TYPE_OPTIONS.find((t) => t.value === type)?.bodyLabel ?? "Notes";
 }
@@ -2563,18 +2590,16 @@ function NewItemForm({
   ].filter((m): m is string => m !== null);
   const ready = missing.length === 0;
 
-  /**
-   * The photograph is the item for these types, and it can also set the
-   * item's position, so it is asked for directly under the title - the other
-   * thing the form will not go without. Everywhere else a picture only
-   * illustrates something that already stands on its own, and putting an
-   * optional cover above a note's own text would be asking for the wrong
-   * thing first.
-   */
-  const imageComesFirst = offerPhotoLocation;
+  // Which field carries this type's substance. Where that substance is a
+  // file or a link rather than words, it is asked for directly under the
+  // title: those two together are the item, and everything below them -
+  // caption, attribution, tags, date, layer - describes something that has
+  // to exist first.
+  const primary = PRIMARY_FIELD[type];
 
-  // Built once and placed in one of two positions, so the field, the EXIF
-  // reading and the "use this location" offer never drift apart.
+  // Each block is built once and placed in one of two positions, so a field
+  // never drifts apart from the notes that belong to it - the EXIF reading
+  // and the "use this location" offer move with the image field.
   const imageBlock = showImage ? (
     <>
       <FileField
@@ -2612,6 +2637,57 @@ function NewItemForm({
         </div>
       )}
     </>
+  ) : null;
+
+  const urlBlock = urlFirst ? (
+    <label className="flex flex-col gap-1 text-xs text-ink-secondary">
+      <span>
+        {type === "video" ? "Video link" : "Web address"}
+        <RequiredMark />
+      </span>
+      <input
+        type="url"
+        name="media_url"
+        required
+        value={mediaUrl}
+        onChange={(e) => setMediaUrl(e.target.value)}
+        placeholder={
+          type === "video" ? "https://youtube.com/watch?v=…" : "https://…"
+        }
+        className="rounded-lg border border-rule bg-card px-2.5 py-1.5 text-[13px] outline-none focus:border-ink-muted"
+      />
+      {type === "video" && (
+        <span className="text-[11px] text-ink-muted">
+          YouTube and Vimeo links play in place. Anything else is kept as a
+          link.
+        </span>
+      )}
+    </label>
+  ) : null;
+
+  const mediaBlock = showMedia ? (
+    <>
+      <FileField
+        name="media_file"
+        accept="audio/*,video/*,application/pdf"
+        label="Audio / video / document file"
+      />
+      <input
+        type="text"
+        name="media_url"
+        placeholder="or paste a link (YouTube, Vimeo, SoundCloud…)"
+        className="rounded-lg border border-rule bg-card px-2.5 py-1.5 text-[13px] outline-none focus:border-ink-muted"
+      />
+    </>
+  ) : null;
+
+  const audioBlock = showAudio ? (
+    <FileField
+      name="media_file"
+      accept="audio/*"
+      label="Recording"
+      hint="The sound itself. Describe it above as well — a recording without words is hard to search and impossible to skim."
+    />
   ) : null;
 
   return (
@@ -2662,7 +2738,10 @@ function NewItemForm({
         />
       </label>
 
-      {imageComesFirst && imageBlock}
+      {primary === "url" && urlBlock}
+      {primary === "media" && mediaBlock}
+      {primary === "audio" && audioBlock}
+      {primary === "image" && imageBlock}
 
       <textarea
         name="body"
@@ -2705,60 +2784,10 @@ function NewItemForm({
         ))}
       </select>
 
-      {urlFirst && (
-        <label className="flex flex-col gap-1 text-xs text-ink-secondary">
-          <span>
-            {type === "video" ? "Video link" : "Web address"}
-            <RequiredMark />
-          </span>
-          <input
-            type="url"
-            name="media_url"
-            required
-            value={mediaUrl}
-            onChange={(e) => setMediaUrl(e.target.value)}
-            placeholder={
-              type === "video"
-                ? "https://youtube.com/watch?v=…"
-                : "https://…"
-            }
-            className="rounded-lg border border-rule bg-card px-2.5 py-1.5 text-[13px] outline-none focus:border-ink-muted"
-          />
-          {type === "video" && (
-            <span className="text-[11px] text-ink-muted">
-              YouTube and Vimeo links play in place. Anything else is kept as a
-              link.
-            </span>
-          )}
-        </label>
-      )}
-
-      {showMedia && (
-        <>
-          <FileField
-            name="media_file"
-            accept="audio/*,video/*,application/pdf"
-            label="Audio / video / document file"
-          />
-          <input
-            type="text"
-            name="media_url"
-            placeholder="or paste a link (YouTube, Vimeo, SoundCloud…)"
-            className="rounded-lg border border-rule bg-card px-2.5 py-1.5 text-[13px] outline-none focus:border-ink-muted"
-          />
-        </>
-      )}
-
-      {showAudio && (
-        <FileField
-          name="media_file"
-          accept="audio/*"
-          label="Recording"
-          hint="The sound itself. Describe it above as well — a recording without words is hard to search and impossible to skim."
-        />
-      )}
-
-      {!imageComesFirst && imageBlock}
+      {primary !== "url" && urlBlock}
+      {primary !== "media" && mediaBlock}
+      {primary !== "audio" && audioBlock}
+      {primary !== "image" && imageBlock}
 
       <div className="flex items-center gap-2">
         <button
