@@ -24,13 +24,28 @@ import type { Geometry } from "./perimeter";
  *                an explicit one.
  *   'about'    - the coordinate is the item's SUBJECT, not its origin. The
  *                article is about this place; it was not made here.
+ *   'unplaced' - no location at all: a theoretical note, a general source.
+ *                The row carries no coordinate, and the item is drawn in the
+ *                margin beside the map rather than on it.
  *   null       - unknown. Every item recorded before any of this was tracked,
  *                and claiming a precision nobody can vouch for is the worse
  *                mistake.
  */
-export type Placement = "photo" | "moved" | "surveyed" | "about" | null;
+export type Placement =
+  | "photo"
+  | "moved"
+  | "surveyed"
+  | "about"
+  | "unplaced"
+  | null;
 
-const CLAIMS: readonly string[] = ["photo", "moved", "surveyed", "about"];
+const CLAIMS: readonly string[] = [
+  "photo",
+  "moved",
+  "surveyed",
+  "about",
+  "unplaced",
+];
 
 /** Narrows whatever came off a form or out of the database. */
 export function asPlacement(value: unknown): Placement {
@@ -66,14 +81,31 @@ export function asksPlacement(type: string, fromPhoto: Placement): boolean {
  * the rectangle would make the project claim ground it never covered.
  */
 export function isSurveyed(located: string | null): boolean {
-  return located !== "about";
+  return located !== "about" && located !== "unplaced";
 }
 
-/** The geometries the perimeter is entitled to enclose. */
+/**
+ * The geometries the perimeter is entitled to enclose.
+ *
+ * Drops the two kinds it is not: an 'about' item, which has a coordinate that
+ * is a subject rather than a position, and an item with no coordinate at all,
+ * which is drawn in the margin beside the map. Leaving the second in would be
+ * a runaway as well as a falsehood - the margin column is placed relative to
+ * the perimeter, so a perimeter that grew to enclose it would push it further
+ * out, and so on.
+ */
 export function surveyedGeometries(
-  items: { geometry: Geometry; located_by: string | null }[]
+  items: { geometry: Geometry | null; located_by: string | null }[]
 ): Geometry[] {
-  return items.filter((i) => isSurveyed(i.located_by)).map((i) => i.geometry);
+  return items
+    .filter((i) => isSurveyed(i.located_by))
+    .map((i) => i.geometry)
+    .filter((g): g is Geometry => g !== null);
+}
+
+/** An item with no location at all, shown in the margin rather than on the map. */
+export function isUnplaced(item: { geometry: unknown }): boolean {
+  return item.geometry === null;
 }
 
 /**

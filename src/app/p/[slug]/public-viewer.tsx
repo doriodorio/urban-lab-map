@@ -25,6 +25,11 @@ import {
   ItemMark,
   type GalleryEntry,
 } from "@/components/margin-labels";
+import {
+  MarginColumn,
+  useMarginColumn,
+  type MarginEntry,
+} from "@/components/margin-column";
 import * as maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { toVideoEmbed, linkHost } from "@/lib/embed";
@@ -44,7 +49,9 @@ type Item = {
   tags: string[] | null;
   date_start: string | null;
   media: { url: string; type: string }[] | null;
-  geometry: Geometry;
+  // Null for an item with no location at all - a theoretical note, a
+  // general source. It is drawn in the margin beside the map, never on it.
+  geometry: Geometry | null;
   /** "photo" when the point came off the photograph's own GPS. */
   located_by: string | null;
 };
@@ -272,15 +279,36 @@ export function PublicViewer({
   // Gallery cards for whatever the map is currently showing. Built from the
   // same `visible` rule as the markers, so a card never points at a hidden
   // item - and laid out by the same hook the editor uses.
-  const galleryEntries: GalleryEntry[] = items.filter(visible).map((item) => ({
-    id: item.id,
-    title: item.title || "Untitled",
-    type: item.type,
-    image: galleryImage(item.media),
-    color: layerColor(item.layer_id),
-    lngLat: centroid(item.geometry),
-  }));
+  const galleryEntries: GalleryEntry[] = items
+    // A card is a leader line back to a point. An item with no location has
+    // no point to lead back to, so it sits this view out; the margin column
+    // is where it appears instead.
+    .filter((item) => visible(item) && item.geometry !== null)
+    .map((item) => ({
+      id: item.id,
+      title: item.title || "Untitled",
+      type: item.type,
+      image: galleryImage(item.media),
+      color: layerColor(item.layer_id),
+      lngLat: centroid(item.geometry!),
+    }));
   const labels = useMarginLabels(mapRef, galleryEntries, galleryOn);
+
+  // Sources with no location, in the margin outside the perimeter's corner.
+  // A reader gets the same column the group arranged, for the same reason:
+  // the article that explains a photograph is part of the finding.
+  const marginEntries: MarginEntry[] = items
+    .filter((item) => visible(item) && item.geometry === null)
+    .map((item) => ({
+      id: item.id,
+      title: item.title || "Untitled",
+      color: layerColor(item.layer_id),
+    }));
+  const marginSlots = useMarginColumn(
+    mapRef,
+    marginEntries,
+    projectPerimeter(surveyedGeometries(items))
+  );
 
   // Only the stages this project actually has anything for.
   const stages: { id: Stage; label: string }[] = [
@@ -427,7 +455,7 @@ export function PublicViewer({
     if (!map) return;
 
     for (const item of items) {
-      if (item.geometry.type !== "Point") continue;
+      if (item.geometry?.type !== "Point") continue;
       let marker = markersRef.current.get(item.id);
 
       if (!marker) {
@@ -450,7 +478,7 @@ export function PublicViewer({
           setSelectedItemId(itemId);
         });
         marker = new maplibregl.Marker({ element: el })
-          .setLngLat(item.geometry.coordinates)
+          .setLngLat(item.geometry.coordinates as [number, number])
           .addTo(map);
         markersRef.current.set(item.id, marker);
       }
@@ -489,18 +517,21 @@ export function PublicViewer({
 
       for (const item of items) {
         if (!visible(item)) continue;
+        const geometry = item.geometry;
+        if (!geometry) continue;
+
         const color = layerColor(item.layer_id);
-        if (item.geometry.type === "LineString") {
+        if (geometry.type === "LineString") {
           lineFeatures.push({
             type: "Feature",
             properties: { id: item.id, color },
-            geometry: item.geometry,
+            geometry,
           });
-        } else if (item.geometry.type === "Polygon") {
+        } else if (geometry.type === "Polygon") {
           polyFeatures.push({
             type: "Feature",
             properties: { id: item.id, color },
-            geometry: item.geometry,
+            geometry,
           });
         }
       }
@@ -518,8 +549,13 @@ export function PublicViewer({
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !currentStep) return;
+    // A stop with no location has nowhere to fly to. Holding the camera
+    // still is the placeholder: how a tour should present a source rather
+    // than a place is a question we have deliberately left open.
+    const stopAt = currentStep.item.geometry;
+    if (!stopAt) return;
     map.easeTo({
-      center: centroid(currentStep.item.geometry),
+      center: centroid(stopAt),
       zoom: Math.max(map.getZoom(), 14),
       duration: 800,
     });
@@ -615,6 +651,15 @@ export function PublicViewer({
             }}
           />
         )}
+
+        <MarginColumn
+          slots={marginSlots}
+          selectedId={selectedItemId}
+          onSelect={(id) => {
+            setMode("explore");
+            setSelectedItemId(id);
+          }}
+        />
 
         <select
           value={mapStyleId}
@@ -734,10 +779,12 @@ export function PublicViewer({
             results={exploreResults}
             onSelect={(item) => {
               setSelectedItemId(item.id);
-              mapRef.current?.easeTo({
-                center: centroid(item.geometry),
-                duration: 600,
-              });
+              if (item.geometry) {
+                mapRef.current?.easeTo({
+                  center: centroid(item.geometry),
+                  duration: 600,
+                });
+              }
             }}
           />
         )}

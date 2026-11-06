@@ -38,6 +38,11 @@ import {
   galleryImage,
   type GalleryEntry,
 } from "@/components/margin-labels";
+import {
+  MarginColumn,
+  useMarginColumn,
+  type MarginEntry,
+} from "@/components/margin-column";
 
 type Layer = { id: string; name: string; color: string | null };
 type Geometry =
@@ -54,7 +59,9 @@ type Item = {
   tags: string[] | null;
   date_start: string | null;
   media: { url: string; type: string }[] | null;
-  geometry: Geometry;
+  // Null for an item with no location at all - a theoretical note, a
+  // general source. It is drawn in the margin beside the map, never on it.
+  geometry: Geometry | null;
   created_by: string | null;
   /** null means "take it from the type" - see lib/categories. */
   category: string | null;
@@ -305,7 +312,7 @@ const STACK_PRECISION = 5; // ~1m at these latitudes
 function stackedItemIds(items: Item[]): Set<string> {
   const byPlace = new Map<string, string[]>();
   for (const item of items) {
-    if (item.geometry.type !== "Point") continue;
+    if (item.geometry?.type !== "Point") continue;
     const [lng, lat] = item.geometry.coordinates;
     const key = `${lng.toFixed(STACK_PRECISION)},${lat.toFixed(STACK_PRECISION)}`;
     byPlace.set(key, [...(byPlace.get(key) ?? []), item.id]);
@@ -485,6 +492,9 @@ export function MapEditor({
   const [query, setQuery] = useState("");
 
   const [drawMode, setDrawMode] = useState<DrawMode>(null);
+  // Composing an item that has no location at all. Not a draw mode: there is
+  // nothing to draw, and the map is not involved.
+  const [composingSource, setComposingSource] = useState(false);
   const [drawPoints, setDrawPoints] = useState<[number, number][]>([]);
   const [pendingGeometry, setPendingGeometry] = useState<Geometry | null>(
     null
@@ -530,7 +540,7 @@ export function MapEditor({
   async function handleMarkerDrop(itemId: string, lng: number, lat: number) {
     const before = itemsRef.current.find((i) => i.id === itemId);
     const from =
-      before?.geometry.type === "Point"
+      before?.geometry?.type === "Point"
         ? (before.geometry.coordinates as [number, number])
         : null;
 
@@ -899,7 +909,7 @@ export function MapEditor({
 
     const pointItems = items.filter(
       (i): i is Item & { geometry: { type: "Point"; coordinates: [number, number] } } =>
-        i.geometry.type === "Point"
+        i.geometry?.type === "Point"
     );
     // Judged across all point items, not just visible ones, so a mark does not
     // change shape when a filter hides the item it was sharing a spot with.
@@ -1001,15 +1011,40 @@ export function MapEditor({
 
   // Gallery cards, laid out by the shared hook so the published view and this
   // one cannot drift apart.
-  const galleryEntries: GalleryEntry[] = visibleItems.map((item) => ({
-    id: item.id,
-    title: item.title || "Untitled",
-    type: item.type,
-    image: galleryImage(item.media),
-    color: layerColor(item.layer_id),
-    lngLat: centroid(item.geometry),
-  }));
+  const galleryEntries: GalleryEntry[] = visibleItems
+    // A gallery card is a leader line back to a point on the map. An item
+    // with no location has no point to lead back to, so it sits this view
+    // out; the margin column is where it appears instead.
+    .filter((item) => item.geometry !== null)
+    .map((item) => ({
+      id: item.id,
+      title: item.title || "Untitled",
+      type: item.type,
+      image: galleryImage(item.media),
+      color: layerColor(item.layer_id),
+      lngLat: centroid(item.geometry!),
+    }));
   const labels = useMarginLabels(mapRef, galleryEntries, previewMode);
+
+  // Sources with no location, stacked in the margin outside the perimeter's
+  // bottom-left corner. Entry order, because the order a group gathered its
+  // reading is itself part of the record.
+  const marginEntries: MarginEntry[] = visibleItems
+    .filter((item) => item.geometry === null)
+    .map((item) => ({
+      id: item.id,
+      title: item.title || "Untitled",
+      color: layerColor(item.layer_id),
+    }));
+
+  // Pinned to the perimeter's corner whether or not the perimeter is drawn:
+  // hiding the outline is a display preference, and it should not take the
+  // sources off the screen with it.
+  const marginSlots = useMarginColumn(
+    mapRef,
+    marginEntries,
+    projectPerimeter(surveyedGeometries(items))
+  );
 
   // Render line/polygon items.
   useEffect(() => {
@@ -1028,18 +1063,21 @@ export function MapEditor({
         const visible = isVisible(item, hiddenLayerIds, activeTags, dateFrom, dateTo, query);
         if (!visible) continue;
 
+        const geometry = item.geometry;
+        if (!geometry) continue;
+
         const color = layerColor(item.layer_id);
-        if (item.geometry.type === "LineString") {
+        if (geometry.type === "LineString") {
           lineFeatures.push({
             type: "Feature",
             properties: { id: item.id, color },
-            geometry: item.geometry,
+            geometry,
           });
-        } else if (item.geometry.type === "Polygon") {
+        } else if (geometry.type === "Polygon") {
           polyFeatures.push({
             type: "Feature",
             properties: { id: item.id, color },
-            geometry: item.geometry,
+            geometry,
           });
         }
       }
@@ -1087,7 +1125,12 @@ export function MapEditor({
   // following a link, where the target is often off-screen.
   function focusItem(item: Item) {
     setSelectedItemId(item.id);
-    mapRef.current?.easeTo({ center: centroid(item.geometry), duration: 600 });
+    // An item in the margin column is always on screen already - it is
+    // pinned to the perimeter's corner, not to the ground - so there is
+    // nowhere to move the camera to.
+    if (item.geometry) {
+      mapRef.current?.easeTo({ center: centroid(item.geometry), duration: 600 });
+    }
   }
 
   function toggleTag(tag: string) {
@@ -1134,6 +1177,12 @@ export function MapEditor({
         {previewMode && (
           <MarginLabels labels={labels} onSelect={setSelectedItemId} />
         )}
+
+        <MarginColumn
+          slots={marginSlots}
+          selectedId={selectedItemId}
+          onSelect={setSelectedItemId}
+        />
 
         <div className="absolute left-3 top-3 flex items-center gap-3 rounded-md border border-rule bg-card px-3.5 py-2">
           <Link
@@ -1249,6 +1298,18 @@ export function MapEditor({
               active={drawMode === "polygon"}
               onClick={() => toggleDrawMode("polygon")}
             />
+            {/* The fourth answer to "where does this go?", which is why it
+                sits with the other three - but behind a rule, because it is
+                the one answer that does not involve the map. */}
+            <span className="mx-1 h-5 w-px bg-rule" />
+            <DrawTool
+              label="No place"
+              active={composingSource}
+              onClick={() => {
+                setDrawMode(null);
+                setComposingSource((on) => !on);
+              }}
+            />
             {drawMode && (
               <span className="px-2 text-[12px] text-ink-secondary">
                 {drawMode === "point"
@@ -1357,14 +1418,20 @@ export function MapEditor({
           />
         )}
 
-        {pendingGeometry && (
+        {(pendingGeometry || composingSource) && (
           <NewItemForm
             geometry={pendingGeometry}
             onGeometryChange={setPendingGeometry}
             layers={layers}
             createItemAction={createItemAction}
-            onDone={() => setPendingGeometry(null)}
-            onCancel={() => setPendingGeometry(null)}
+            onDone={() => {
+              setPendingGeometry(null);
+              setComposingSource(false);
+            }}
+            onCancel={() => {
+              setPendingGeometry(null);
+              setComposingSource(false);
+            }}
           />
         )}
 
@@ -2483,7 +2550,7 @@ function NewItemForm({
   onDone,
   onCancel,
 }: {
-  geometry: Geometry;
+  geometry: Geometry | null;
   onGeometryChange: (geometry: Geometry) => void;
   layers: Layer[];
   createItemAction: BoundAction;
@@ -2508,7 +2575,9 @@ function NewItemForm({
   // Starts unanswered on purpose: defaulting it to "found here" would make
   // the honest answer the one that costs a click, and the whole value of the
   // field is that it was actually answered.
-  const [claim, setClaim] = useState<"surveyed" | "about" | null>(null);
+  const [claim, setClaim] = useState<
+    "surveyed" | "about" | "unplaced" | null
+  >(null);
   const [photoCoords, setPhotoCoords] = useState<[number, number] | null>(
     null
   );
@@ -2556,7 +2625,7 @@ function NewItemForm({
   }
 
   const photoCoordsDiffer =
-    geometry.type === "Point" &&
+    geometry?.type === "Point" &&
     photoCoords &&
     (photoCoords[0] !== geometry.coordinates[0] ||
       photoCoords[1] !== geometry.coordinates[1]);
@@ -2589,7 +2658,9 @@ function NewItemForm({
   // What the button is waiting for. A grey button on its own is a dead end -
   // it is pressed, nothing happens, and nothing on the screen says why - so
   // the same check that greys it writes the line underneath it.
-  const askPlacement = asksPlacement(type, locatedBy);
+  // Nothing to ask when there is no coordinate: the item is unplaced by
+  // construction and the question was settled before the form opened.
+  const askPlacement = geometry !== null && asksPlacement(type, locatedBy);
   const missing = [
     title.trim() ? null : "a title",
     requiresImage(type) && !imageFile ? "an image file" : null,
@@ -2704,12 +2775,18 @@ function NewItemForm({
       className="flex flex-col gap-2 border-t border-rule p-4"
     >
       <p className="label">
-        New item — {geometryLabel(geometry)}
+        {geometry ? `New item — ${geometryLabel(geometry)}` : "New source — no location"}
       </p>
-      <input type="hidden" name="geometry" value={JSON.stringify(geometry)} />
-      {(locatedBy ?? claim) && (
-        <input type="hidden" name="located_by" value={locatedBy ?? claim!} />
+      {geometry && (
+        <input type="hidden" name="geometry" value={JSON.stringify(geometry)} />
       )}
+      {/* With no geometry there is nothing to ask: the item is unplaced by
+          construction, and the claim is settled before the form opens. */}
+      <input
+        type="hidden"
+        name="located_by"
+        value={geometry ? (locatedBy ?? claim ?? "") : "unplaced"}
+      />
       <input type="hidden" name="type" value={type} />
 
       <select
@@ -2768,6 +2845,11 @@ function NewItemForm({
                   "about",
                   "About here",
                   "Refers to this place. Made somewhere else.",
+                ],
+                [
+                  "unplaced",
+                  "Nowhere",
+                  "Has no location. Goes in the margin beside the map.",
                 ],
               ] as const
             ).map(([value, label, hint]) => (
@@ -3095,7 +3177,12 @@ function ItemDetail({
           : "Added before authorship was recorded"}
       </p>
 
-      {item.geometry.type === "Point" ? (
+      {!item.geometry ? (
+        <p className="text-xs text-ink-muted">
+          No location — shown in the margin beside the map, in the order it
+          was added
+        </p>
+      ) : item.geometry.type === "Point" ? (
         <div className="flex flex-col gap-0.5">
           <p className="text-xs text-ink-muted">
             {item.geometry.coordinates[1].toFixed(5)},{" "}

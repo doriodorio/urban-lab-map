@@ -264,8 +264,12 @@ export async function createItem(
   if (!VALID_TYPES.includes(type)) {
     return { error: "Invalid item type." };
   }
-  const geometry = parseGeometry(geometryRaw);
-  if (!geometry) {
+  // An unplaced item is stored with no coordinate at all. Any position it
+  // appears at is worked out when the map is drawn, from the perimeter's
+  // corner, and is never written here: a stored corner would show up in a
+  // GeoJSON export as a tight cluster of points and read as evidence.
+  const geometry = locatedBy === "unplaced" ? null : parseGeometry(geometryRaw);
+  if (!geometry && locatedBy !== "unplaced") {
     return { error: "Missing or invalid map location." };
   }
 
