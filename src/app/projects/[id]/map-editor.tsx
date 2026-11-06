@@ -173,6 +173,21 @@ const COVER_IMAGE_TYPES = new Set([
 /** Types whose substance is a recording. */
 const AUDIO_TYPES = new Set(["sound"]);
 
+/** Whether a type offers a picture at all - as the item, or as a cover. */
+function showsImage(type: string) {
+  return type === "image" || type === "composite" || COVER_IMAGE_TYPES.has(type);
+}
+
+/**
+ * Types that are nothing without the file. An image item with no image is an
+ * empty record that still takes up a pin on the map, so the form refuses to
+ * make one. Everywhere else the file illustrates something that stands on its
+ * own - a note, a citation - and withholding the button would be wrong.
+ */
+function requiresImage(type: string) {
+  return type === "image";
+}
+
 function bodyLabelFor(type: string) {
   return TYPE_OPTIONS.find((t) => t.value === type)?.bodyLabel ?? "Notes";
 }
@@ -2305,6 +2320,133 @@ function geometryLabel(geometry: Geometry) {
   return `Polygon — ${geometry.coordinates[0].length - 1} points`;
 }
 
+/**
+ * The mark on a field that will not let you past it.
+ *
+ * Red, and not the catalog crimson: crimson means "this is an accession
+ * reference" and is spent on nothing else, so borrowing it here would start
+ * teaching people the wrong thing about the colour. An asterisk is read as
+ * "required" rather than as "something has gone wrong", which the same red on
+ * a sentence of its own would be.
+ */
+function RequiredMark() {
+  return (
+    <>
+      <span aria-hidden className="text-red-700">
+        {" *"}
+      </span>
+      <span className="sr-only"> (required)</span>
+    </>
+  );
+}
+
+/**
+ * A file field you can see.
+ *
+ * The native control is a small grey "Choose File" button with no border,
+ * sitting in a column of bordered inputs - it reads as caption text rather
+ * than as something to press, and people looked straight past it. The input
+ * underneath is unchanged: same name, same files, so the form and the EXIF
+ * reader behave exactly as before. What changed is that it is now a
+ * full-width target the size of every other field, it says what it wants, it
+ * takes a dropped file, and once a file is chosen it says which one - the
+ * native control reports "No file chosen" in the same breath as the button,
+ * which is the one state people misread as "chosen".
+ */
+function FileField({
+  name,
+  accept,
+  label,
+  hint,
+  required,
+  onChange,
+  onFile,
+}: {
+  name: string;
+  accept: string;
+  label: React.ReactNode;
+  hint?: React.ReactNode;
+  required?: boolean;
+  onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void | Promise<void>;
+  onFile?: (file: File | null) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const [fileName, setFileName] = useState<string | null>(null);
+  const [dragging, setDragging] = useState(false);
+
+  async function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
+    // Read off the element now: React clears currentTarget once the handler
+    // yields, and this one awaits.
+    const input = e.currentTarget;
+    setFileName(input.files?.[0]?.name ?? null);
+    onFile?.(input.files?.[0] ?? null);
+    if (!onChange) return;
+    await onChange(e);
+    // The handler may have swapped the file in - a HEIC converted, an
+    // oversized photo scaled - and that renames it.
+    setFileName(input.files?.[0]?.name ?? null);
+    onFile?.(input.files?.[0] ?? null);
+  }
+
+  function handleDrop(e: React.DragEvent) {
+    e.preventDefault();
+    setDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    const input = inputRef.current;
+    if (!file || !input) return;
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    input.files = dt.files;
+    // Assigning .files fires nothing, so without this the rest of the form -
+    // the EXIF read, the submit button - never hears about a dropped file.
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+
+  return (
+    <label className="flex flex-col gap-1 text-xs text-ink-secondary">
+      <span>
+        {label}
+        {required && <RequiredMark />}
+      </span>
+      {/* Dashed while it is empty - that is what says "something goes in
+          here" - and solid once it is filled, so it settles into the column
+          of ordinary fields instead of still asking. */}
+      <span
+        onDragOver={(e) => {
+          e.preventDefault();
+          setDragging(true);
+        }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={handleDrop}
+        className={`flex cursor-pointer items-center gap-2 rounded-lg border px-2.5 py-2 text-[13px] ${
+          fileName ? "border-solid" : "border-dashed"
+        } ${
+          dragging
+            ? "border-ink bg-paper"
+            : "border-rule bg-card hover:border-ink-muted"
+        }`}
+      >
+        <input
+          ref={inputRef}
+          type="file"
+          name={name}
+          accept={accept}
+          required={required}
+          onChange={handleChange}
+          className="sr-only"
+        />
+        <span className={fileName ? "truncate text-ink" : "text-ink-muted"}>
+          {fileName ?? "Choose a file, or drag one here"}
+        </span>
+        {fileName && (
+          <span className="label ml-auto shrink-0">Change</span>
+        )}
+      </span>
+      {hint && <span className="text-[11px] text-ink-muted">{hint}</span>}
+    </label>
+  );
+}
+
 function NewItemForm({
   geometry,
   onGeometryChange,
@@ -2327,6 +2469,13 @@ function NewItemForm({
   };
   const [state, formAction, pending] = useActionState(wrappedAction, {});
   const [type, setType] = useState("text");
+  // Tracked, rather than left to the browser's own validation, because the
+  // submit button says whether the form is ready before it is pressed - and
+  // a button that looks pressable and then does nothing is the thing being
+  // fixed here, not a thing to reproduce.
+  const [title, setTitle] = useState("");
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [mediaUrl, setMediaUrl] = useState("");
   const [photoCoords, setPhotoCoords] = useState<[number, number] | null>(
     null
   );
@@ -2396,13 +2545,23 @@ function NewItemForm({
   // entirely, and offering to move the item there would be wrong more often
   // than right.
   const isCover = COVER_IMAGE_TYPES.has(type);
-  const showImage = type === "image" || type === "composite" || isCover;
+  const showImage = showsImage(type);
   const offerPhotoLocation = type === "image" || type === "composite";
   const urlFirst = URL_FIRST_TYPES.has(type);
   const showMedia =
     type === "interview" || type === "document" || type === "composite";
   const showAudio = AUDIO_TYPES.has(type);
   const showAttribution = type !== "text" && type !== "data";
+
+  // What the button is waiting for. A grey button on its own is a dead end -
+  // it is pressed, nothing happens, and nothing on the screen says why - so
+  // the same check that greys it writes the line underneath it.
+  const missing = [
+    title.trim() ? null : "a title",
+    requiresImage(type) && !imageFile ? "an image file" : null,
+    urlFirst && !mediaUrl.trim() ? "a link" : null,
+  ].filter((m): m is string => m !== null);
+  const ready = missing.length === 0;
 
   return (
     <form
@@ -2420,7 +2579,13 @@ function NewItemForm({
 
       <select
         value={type}
-        onChange={(e) => setType(e.target.value)}
+        onChange={(e) => {
+          const next = e.target.value;
+          setType(next);
+          // The field unmounts with the type, taking the chosen file with
+          // it, so the state that gates the button has to go too.
+          if (!showsImage(next)) setImageFile(null);
+        }}
         className="rounded-lg border border-rule bg-card px-2.5 py-1.5 text-[13px] outline-none focus:border-ink-muted"
       >
         {TYPE_OPTIONS.map((t) => (
@@ -2430,13 +2595,21 @@ function NewItemForm({
         ))}
       </select>
 
-      <input
-        type="text"
-        name="title"
-        required
-        placeholder="Title"
-        className="rounded-lg border border-rule bg-card px-2.5 py-1.5 text-[13px] outline-none focus:border-ink-muted"
-      />
+      <label className="flex flex-col gap-1 text-xs text-ink-secondary">
+        <span>
+          Title
+          <RequiredMark />
+        </span>
+        <input
+          type="text"
+          name="title"
+          required
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder="What is this, in a few words"
+          className="rounded-lg border border-rule bg-card px-2.5 py-1.5 text-[13px] outline-none focus:border-ink-muted"
+        />
+      </label>
       <textarea
         name="body"
         rows={3}
@@ -2480,11 +2653,16 @@ function NewItemForm({
 
       {urlFirst && (
         <label className="flex flex-col gap-1 text-xs text-ink-secondary">
-          {type === "video" ? "Video link" : "Web address"}
+          <span>
+            {type === "video" ? "Video link" : "Web address"}
+            <RequiredMark />
+          </span>
           <input
             type="url"
             name="media_url"
             required
+            value={mediaUrl}
+            onChange={(e) => setMediaUrl(e.target.value)}
             placeholder={
               type === "video"
                 ? "https://youtube.com/watch?v=…"
@@ -2503,15 +2681,11 @@ function NewItemForm({
 
       {showMedia && (
         <>
-          <label className="flex flex-col gap-1 text-xs text-ink-secondary">
-            Audio / video / document file
-            <input
-              type="file"
-              name="media_file"
-              accept="audio/*,video/*,application/pdf"
-              className="text-sm"
-            />
-          </label>
+          <FileField
+            name="media_file"
+            accept="audio/*,video/*,application/pdf"
+            label="Audio / video / document file"
+          />
           <input
             type="text"
             name="media_url"
@@ -2522,32 +2696,23 @@ function NewItemForm({
       )}
 
       {showAudio && (
-        <label className="flex flex-col gap-1 text-xs text-ink-secondary">
-          Recording
-          <input
-            type="file"
-            name="media_file"
-            accept="audio/*"
-            className="text-sm"
-          />
-          <span className="text-[11px] text-ink-muted">
-            The sound itself. Describe it above as well &mdash; a recording
-            without words is hard to search and impossible to skim.
-          </span>
-        </label>
+        <FileField
+          name="media_file"
+          accept="audio/*"
+          label="Recording"
+          hint="The sound itself. Describe it above as well — a recording without words is hard to search and impossible to skim."
+        />
       )}
 
       {showImage && (
-        <label className="flex flex-col gap-1 text-xs text-ink-secondary">
-          {isCover ? "Cover image (optional)" : "Image"}
-          <input
-            type="file"
-            name="image"
-            accept="image/*"
-            className="text-sm"
-            onChange={offerPhotoLocation ? handleImageChange : undefined}
-          />
-        </label>
+        <FileField
+          name="image"
+          accept="image/*"
+          label={isCover ? "Cover image (optional)" : "Image"}
+          required={requiresImage(type)}
+          onChange={offerPhotoLocation ? handleImageChange : undefined}
+          onFile={setImageFile}
+        />
       )}
 
       {checkingExif && (
@@ -2579,11 +2744,11 @@ function NewItemForm({
         </div>
       )}
 
-      <div className="flex gap-2">
+      <div className="flex items-center gap-2">
         <button
           type="submit"
-          disabled={pending}
-          className="press self-start rounded-md bg-ink px-4 py-1.5 text-[13px] font-medium text-white disabled:opacity-40"
+          disabled={pending || !ready}
+          className="press self-start rounded-md bg-ink px-4 py-1.5 text-[13px] font-medium text-white disabled:cursor-not-allowed disabled:opacity-40"
         >
           {pending ? "Saving…" : "Add item"}
         </button>
@@ -2594,6 +2759,11 @@ function NewItemForm({
         >
           Cancel
         </button>
+        {!ready && !pending && (
+          <span className="text-[11px] text-ink-muted">
+            Still needs {missing.join(" and ")}.
+          </span>
+        )}
       </div>
       {state?.error && <p className="text-sm text-red-600">{state.error}</p>}
     </form>
