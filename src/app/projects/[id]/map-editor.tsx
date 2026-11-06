@@ -2563,6 +2563,57 @@ function NewItemForm({
   ].filter((m): m is string => m !== null);
   const ready = missing.length === 0;
 
+  /**
+   * The photograph is the item for these types, and it can also set the
+   * item's position, so it is asked for directly under the title - the other
+   * thing the form will not go without. Everywhere else a picture only
+   * illustrates something that already stands on its own, and putting an
+   * optional cover above a note's own text would be asking for the wrong
+   * thing first.
+   */
+  const imageComesFirst = offerPhotoLocation;
+
+  // Built once and placed in one of two positions, so the field, the EXIF
+  // reading and the "use this location" offer never drift apart.
+  const imageBlock = showImage ? (
+    <>
+      <FileField
+        name="image"
+        accept="image/*"
+        label={isCover ? "Cover image (optional)" : "Image"}
+        required={requiresImage(type)}
+        onChange={offerPhotoLocation ? handleImageChange : undefined}
+        onFile={setImageFile}
+      />
+      {checkingExif && <p className="text-xs text-ink-muted">Reading photo…</p>}
+      {photoNote && !checkingExif && (
+        <p className="text-xs text-ink-secondary">{photoNote}</p>
+      )}
+      {exifChecked && !checkingExif && !photoCoords && offerPhotoLocation && (
+        <p className="text-xs text-ink-muted">
+          No location data found in this photo.
+        </p>
+      )}
+      {photoCoordsDiffer && (
+        <div className="flex items-center justify-between rounded bg-blue-50 px-2 py-1.5 text-xs text-blue-800">
+          <span>
+            📍 Photo taken at {photoCoords[1].toFixed(5)},{" "}
+            {photoCoords[0].toFixed(5)}
+          </span>
+          <button
+            type="button"
+            onClick={() =>
+              onGeometryChange({ type: "Point", coordinates: photoCoords })
+            }
+            className="font-medium underline"
+          >
+            Use this location
+          </button>
+        </div>
+      )}
+    </>
+  ) : null;
+
   return (
     <form
       action={formAction}
@@ -2610,6 +2661,9 @@ function NewItemForm({
           className="rounded-lg border border-rule bg-card px-2.5 py-1.5 text-[13px] outline-none focus:border-ink-muted"
         />
       </label>
+
+      {imageComesFirst && imageBlock}
+
       <textarea
         name="body"
         rows={3}
@@ -2704,45 +2758,7 @@ function NewItemForm({
         />
       )}
 
-      {showImage && (
-        <FileField
-          name="image"
-          accept="image/*"
-          label={isCover ? "Cover image (optional)" : "Image"}
-          required={requiresImage(type)}
-          onChange={offerPhotoLocation ? handleImageChange : undefined}
-          onFile={setImageFile}
-        />
-      )}
-
-      {checkingExif && (
-        <p className="text-xs text-ink-muted">Reading photo…</p>
-      )}
-      {photoNote && !checkingExif && (
-        <p className="text-xs text-ink-secondary">{photoNote}</p>
-      )}
-      {exifChecked && !checkingExif && !photoCoords && offerPhotoLocation && (
-        <p className="text-xs text-ink-muted">
-          No location data found in this photo.
-        </p>
-      )}
-      {photoCoordsDiffer && (
-        <div className="flex items-center justify-between rounded bg-blue-50 px-2 py-1.5 text-xs text-blue-800">
-          <span>
-            📍 Photo taken at {photoCoords[1].toFixed(5)},{" "}
-            {photoCoords[0].toFixed(5)}
-          </span>
-          <button
-            type="button"
-            onClick={() =>
-              onGeometryChange({ type: "Point", coordinates: photoCoords })
-            }
-            className="font-medium underline"
-          >
-            Use this location
-          </button>
-        </div>
-      )}
+      {!imageComesFirst && imageBlock}
 
       <div className="flex items-center gap-2">
         <button
