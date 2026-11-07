@@ -60,6 +60,9 @@ const HALF = 11;
  * still reads as part of that row rather than as material.
  */
 const TOOLBAR = 66;
+/** Paper showing around the marks, and a mark's own height. */
+const PANEL_PAD = 8;
+const MARK_HEIGHT = 22;
 
 function clamp(value: number, low: number, high: number): number {
   return Math.min(Math.max(value, low), Math.max(low, high));
@@ -129,7 +132,13 @@ export function useMarginColumn(
         const width = canvas.clientWidth;
         const height = canvas.clientHeight;
         const last = (entries.length - 1) * STEP;
-        const x = clamp(at.x, EDGE, width - COLUMN_WIDTH);
+        // The panel is drawn a little outside the marks on both sides, so the
+        // edge the reader sees is PANEL_PAD past the anchor, not the anchor.
+        const x = clamp(
+          at.x,
+          EDGE + PANEL_PAD,
+          width - COLUMN_WIDTH - EDGE
+        );
         const y = clamp(
           at.y,
           EDGE + HALF,
@@ -167,7 +176,16 @@ export function useMarginColumn(
  * that is not a measurement - here with no coordinate at all behind it - and
  * carries its title beside it, because a column of identical marks in the
  * white space would be a puzzle rather than a list.
+ *
+ * The marks sit on a panel rather than floating free. A margin on a map sheet
+ * is a piece of paper, not a gap: it has an edge, and what is printed on it is
+ * read as a list because the paper says so. Loose labels over the territory
+ * read instead as things standing in it, faintly, which is the one reading
+ * this whole column exists to prevent. The panel is nearly opaque so street
+ * names do not run through the titles, and it is drawn once behind the whole
+ * stack so the stack reads as one list and not as scattered notes.
  */
+
 export function MarginColumn({
   slots,
   selectedId,
@@ -179,15 +197,27 @@ export function MarginColumn({
 }) {
   if (slots.length === 0) return null;
 
+  const panel = {
+    left: slots[0].x - PANEL_PAD,
+    top: slots[0].y - MARK_HEIGHT / 2 - PANEL_PAD,
+    width: COLUMN_WIDTH + PANEL_PAD,
+    height: (slots.length - 1) * STEP + MARK_HEIGHT + PANEL_PAD * 2,
+  };
+
   return (
     <div className="pointer-events-none absolute inset-0 z-10">
+      <div
+        aria-hidden
+        style={panel}
+        className="absolute rounded-md border border-rule bg-paper/95 shadow-sm backdrop-blur-[2px]"
+      />
       {slots.map((slot) => (
         <button
           key={slot.id}
           type="button"
           onClick={() => onSelect(slot.id)}
           style={{ left: slot.x, top: slot.y }}
-          className="pointer-events-auto absolute flex max-w-[180px] -translate-y-1/2 items-center gap-2 rounded bg-paper/90 px-1.5 py-0.5 text-left"
+          className="pointer-events-auto absolute flex max-w-[180px] -translate-y-1/2 items-center gap-2 rounded px-1.5 py-0.5 text-left"
         >
           <span
             aria-hidden
