@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import type * as maplibregl from "maplibre-gl";
 import type { PerimeterRing } from "@/lib/perimeter";
+import { useMapInstance } from "@/lib/map-ready";
 
 /**
  * The sources that have no place.
@@ -86,6 +87,7 @@ export function useMarginColumn(
   entries: MarginEntry[],
   perimeter: PerimeterRing | null
 ): MarginBox | null {
+  const map = useMapInstance(mapRef);
   const [box, setBox] = useState<MarginBox | null>(null);
 
   const count = entries.length;
@@ -94,11 +96,10 @@ export function useMarginColumn(
     : "";
 
   useEffect(() => {
-    const map = mapRef.current;
-    if (!map || count === 0) {
-      setBox(null);
-      return;
-    }
+    // Nothing to subscribe to. The box is not cleared here - a hook that
+    // writes state on its way out re-renders for no reason - it is withheld
+    // at the return instead.
+    if (!map || count === 0) return;
 
     let frame = 0;
     const compute = () => {
@@ -174,9 +175,9 @@ export function useMarginColumn(
       map.off("resize", compute);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [count, corners, mapRef]);
+  }, [count, corners, map]);
 
-  return box;
+  return map && count > 0 ? box : null;
 }
 
 /**

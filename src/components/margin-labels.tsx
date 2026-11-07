@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import type * as maplibregl from "maplibre-gl";
 import { videoThumbnail } from "@/lib/embed";
+import { useMapInstance } from "@/lib/map-ready";
 
 /**
  * The gallery view: every item visible on the map gets a card in the margins,
@@ -118,11 +119,15 @@ function stackLabels(
  * `move` fires far faster than React can usefully re-render, and each pass
  * projects every visible item.
  */
+/** One shared empty array, so a disabled view hands back a stable value. */
+const NO_LABELS: LabelPlacement[] = [];
+
 export function useMarginLabels(
   mapRef: { current: maplibregl.Map | null },
   entries: GalleryEntry[],
   enabled: boolean
 ): LabelPlacement[] {
+  const map = useMapInstance(mapRef);
   const [labels, setLabels] = useState<LabelPlacement[]>([]);
 
   // Only the identity of what's on screen matters to the layout, so this keeps
@@ -132,13 +137,11 @@ export function useMarginLabels(
     .join("|");
 
   useEffect(() => {
-    const map = mapRef.current;
-    // Nothing to lay out when the view is off; the overlay isn't rendered then
-    // either, so stale entries in state are never shown.
-    if (!map || !enabled) {
-      setLabels([]);
-      return;
-    }
+    // Nothing to lay out when the view is off. State is not cleared here - a
+    // hook that writes on its way out re-renders for no reason - the stale
+    // entries are withheld at the return instead, and the overlay isn't
+    // rendered while the view is off either way.
+    if (!map || !enabled) return;
 
     let frame = 0;
     const compute = () => {
@@ -209,9 +212,9 @@ export function useMarginLabels(
       cancelAnimationFrame(frame);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, signature]);
+  }, [enabled, signature, map]);
 
-  return labels;
+  return map && enabled ? labels : NO_LABELS;
 }
 
 /**

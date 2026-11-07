@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import type * as maplibregl from "maplibre-gl";
 
 /**
@@ -64,4 +65,43 @@ export function whenStyleReady(
     done = true;
     detach();
   };
+}
+
+/**
+ * The map, once it exists, as a value a render can depend on.
+ *
+ * A ref is not a dependency. A hook that reads `mapRef.current` in an effect
+ * and gives up when it is null is betting that the map was created by an
+ * earlier effect - which holds only while its call sits below the one that
+ * builds the map, in the same component. Move it up a few lines, or call it
+ * from a second component that happens to be ordered differently, and the
+ * effect runs once against null and is never scheduled again, because a ref
+ * changing re-renders nothing. The overlay then never appears and there is
+ * nothing in the console to say why. That is exactly how the unplaced
+ * sources went missing from the public viewer while working in the editor:
+ * the same hook, the same data, called twelve lines higher up.
+ *
+ * So the ref is watched until it is filled and the map is handed back as
+ * state, which does re-run the effects that depend on it. The watch costs a
+ * handful of frames once per mount and ends the moment the map appears.
+ */
+export function useMapInstance(mapRef: {
+  current: maplibregl.Map | null;
+}): maplibregl.Map | null {
+  const [map, setMap] = useState<maplibregl.Map | null>(mapRef.current);
+
+  useEffect(() => {
+    if (mapRef.current) {
+      setMap(mapRef.current);
+      return;
+    }
+
+    let frame = requestAnimationFrame(function look() {
+      if (mapRef.current) setMap(mapRef.current);
+      else frame = requestAnimationFrame(look);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [mapRef]);
+
+  return map;
 }
