@@ -304,7 +304,7 @@ export function PublicViewer({
       title: item.title || "Untitled",
       color: layerColor(item.layer_id),
     }));
-  const marginSlots = useMarginColumn(
+  const marginBox = useMarginColumn(
     mapRef,
     marginEntries,
     projectPerimeter(surveyedGeometries(items))
@@ -653,7 +653,8 @@ export function PublicViewer({
         )}
 
         <MarginColumn
-          slots={marginSlots}
+          box={marginBox}
+          entries={marginEntries}
           selectedId={selectedItemId}
           onSelect={(id) => {
             setMode("explore");

@@ -15,18 +15,17 @@ import type { PerimeterRing } from "@/lib/perimeter";
  * standing in it.
  *
  * So they are kept with no coordinate, and drawn beside the map instead of on
- * it: a column stepping down from the outside of the perimeter's bottom-right
- * corner, in the order the group gathered them. That is the oldest convention
+ * it: a strip running the full width of the perimeter, just under its bottom
+ * edge, in the order the group gathered them. That is the oldest convention
  * a map sheet has - the margin, where the legend and the sources have always
  * lived, and which nobody has ever read as part of the territory.
  *
  * Two rules hold it up.
  *
- * The column is laid out in screen pixels against the projected corner, not
- * at spaced coordinates. Coordinates would scatter the stack at every zoom,
+ * The strip is laid out in screen pixels against the projected corners, not
+ * at spaced coordinates. Coordinates would scatter the row at every zoom,
  * and - because the perimeter is derived from the items - a stored position
- * at its corner would push the corner out, which would push the stack out
- * again.
+ * on its edge would push that edge out, which would push the row out again.
  *
  * And the position is never written down. A row keeps a null geometry, so
  * anything else that opens this project - a GeoJSON export, QGIS - sees no
@@ -40,58 +39,58 @@ export type MarginEntry = {
   color: string;
 };
 
-/** Side of the perimeter's corner, in pixels, and the step between marks. */
-const GUTTER = 18;
-const STEP = 22;
-/** Below the corner, so the first mark clears the perimeter's own line. */
-const DROP = 14;
-/**
- * How much room the column needs to its right, and how close to any edge it
- * may come. A mark is left-aligned on its anchor with its title running out
- * from it, so the anchor needs a label's width of canvas ahead of it.
- */
-const COLUMN_WIDTH = 188;
+/** Below the perimeter's bottom edge, so the strip clears its own line. */
+const DROP = 12;
+/** How close to any edge of the canvas the strip may come. */
 const EDGE = 8;
-/** Half a mark's height: a mark is centred on its anchor, not hung below it. */
-const HALF = 11;
 /**
- * Kept clear at the foot of the canvas for the drawing tools. They sit in the
- * bottom-left, which the column no longer shares, but a label level with them
- * still reads as part of that row rather than as material.
+ * Kept clear at the foot of the canvas for the drawing tools, which sit in
+ * the bottom-left. The strip now runs the full width of the perimeter, so it
+ * crosses above them rather than beside them.
  */
 const TOOLBAR = 66;
-/** Paper showing around the marks, and a mark's own height. */
+/** Paper showing around the marks, a row's height, and a mark's own width. */
 const PANEL_PAD = 8;
-const MARK_HEIGHT = 22;
+const ROW_HEIGHT = 24;
+const MARK_WIDTH = 196;
+/**
+ * A strip narrower than this has nowhere to put a title, which happens when
+ * the perimeter itself is a sliver - a project whose material is all in one
+ * street, or a view zoomed far out.
+ */
+const MIN_WIDTH = 220;
 
 function clamp(value: number, low: number, high: number): number {
   return Math.min(Math.max(value, low), Math.max(low, high));
 }
 
-export type MarginSlot = MarginEntry & { x: number; y: number };
+/** Where the strip sits on screen, in canvas pixels. */
+export type MarginBox = { left: number; top: number; width: number };
 
 /**
- * Where each unplaced item sits on screen right now.
+ * Where the margin strip sits on screen right now.
  *
- * Recomputed on every map move - the corner is a geographic point, so it
- * travels with the map even though the column's spacing does not. Throttled
- * to one pass per frame, like the gallery's own layout: `move` fires far
- * faster than React can usefully re-render.
+ * Recomputed on every map move - the perimeter's corners are geographic
+ * points, so they travel with the map even though the strip's padding does
+ * not. Throttled to one pass per frame, like the gallery's own layout: `move`
+ * fires far faster than React can usefully re-render.
  */
 export function useMarginColumn(
   mapRef: { current: maplibregl.Map | null },
   entries: MarginEntry[],
   perimeter: PerimeterRing | null
-): MarginSlot[] {
-  const [slots, setSlots] = useState<MarginSlot[]>([]);
+): MarginBox | null {
+  const [box, setBox] = useState<MarginBox | null>(null);
 
-  const signature = entries.map((e) => `${e.id}:${e.color}`).join("|");
-  const corner = perimeter ? `${perimeter[1][0]},${perimeter[1][1]}` : "";
+  const count = entries.length;
+  const corners = perimeter
+    ? `${perimeter[0][0]},${perimeter[0][1]}|${perimeter[1][0]},${perimeter[1][1]}`
+    : "";
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || entries.length === 0) {
-      setSlots([]);
+    if (!map || count === 0) {
+      setBox(null);
       return;
     }
 
@@ -100,58 +99,51 @@ export function useMarginColumn(
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(() => {
         const canvas = map.getCanvas();
-        // perimeter[1] is the ring's south-east corner: the rectangle is
-        // built [SW, SE, NE, NW, SW]. The column hangs off the right-hand
-        // side, which is the margin a Hebrew reader meets first, and which
-        // leaves the bottom-left to the drawing tools.
+        const width = canvas.clientWidth;
+        const height = canvas.clientHeight;
+
+        // perimeter[0] and [1] are the ring's south-west and south-east
+        // corners: the rectangle is built [SW, SE, NE, NW, SW]. The strip
+        // runs between them, under the frame's bottom edge, which is where a
+        // map sheet has always put its sources.
         //
         // A project whose only material so far is unplaced has no perimeter
-        // to hang off - and that is exactly the project where losing the
-        // column would be worst, because nothing else is on the map either.
-        // It falls back to the lower right of the view.
-        const at = perimeter
-          ? { x: map.project(perimeter[1]).x + GUTTER, y: map.project(perimeter[1]).y + DROP }
-          : {
-              x: canvas.clientWidth - COLUMN_WIDTH - 32,
-              y: canvas.clientHeight - 60 - (entries.length - 1) * STEP,
-            };
+        // to measure - and that is exactly the project where losing the strip
+        // would be worst, because nothing else is on the map either. It falls
+        // back to the foot of the view.
+        const sw = perimeter ? map.project(perimeter[0]) : null;
+        const se = perimeter ? map.project(perimeter[1]) : null;
+        const want =
+          sw && se
+            ? { left: sw.x, top: se.y + DROP, width: se.x - sw.x }
+            : {
+                left: EDGE,
+                top: height - TOOLBAR - 80,
+                width: width - EDGE * 2,
+              };
 
-        // The corner is a geographic point, so nothing keeps it on screen -
+        // The corners are geographic points, so nothing keeps them on screen,
         // and the usual case is the worst one. Opening a project fits the
         // view to its items, which leaves the perimeter filling the canvas
-        // with no white space outside it to put a margin in, so the column
-        // lands past the right edge and cannot even be clicked.
+        // with no white space outside it to put a margin in, so the strip
+        // lands past the bottom edge and cannot even be clicked.
         //
-        // So the corner is where the column wants to be, not where it has to
-        // be: it is held inside the canvas, and when the corner leaves the
-        // view the column stays at the edge rather than following it out.
+        // So the perimeter is where the strip wants to be, not where it has
+        // to be: it is held inside the canvas, and when the frame leaves the
+        // view the strip stays at the edge rather than following it out.
         // Overlapping the map a little is a smaller lie than vanishing - the
         // material is still in the project either way, and a reader who
         // cannot see it has been told something false about what was
         // gathered.
-        const width = canvas.clientWidth;
-        const height = canvas.clientHeight;
-        const last = (entries.length - 1) * STEP;
-        // The panel is drawn a little outside the marks on both sides, so the
-        // edge the reader sees is PANEL_PAD past the anchor, not the anchor.
-        const x = clamp(
-          at.x,
-          EDGE + PANEL_PAD,
-          width - COLUMN_WIDTH - EDGE
-        );
-        const y = clamp(
-          at.y,
-          EDGE + HALF,
-          height - TOOLBAR - HALF - last
-        );
+        const strip = clamp(want.width, MIN_WIDTH, width - EDGE * 2);
+        const perRow = Math.max(1, Math.floor(strip / MARK_WIDTH));
+        const tall = Math.ceil(count / perRow) * ROW_HEIGHT + PANEL_PAD * 2;
 
-        setSlots(
-          entries.map((entry, i) => ({
-            ...entry,
-            x,
-            y: y + i * STEP,
-          }))
-        );
+        setBox({
+          left: clamp(want.left, EDGE, width - strip - EDGE),
+          top: clamp(want.top, EDGE, height - TOOLBAR - tall),
+          width: strip,
+        });
       });
     };
 
@@ -164,80 +156,78 @@ export function useMarginColumn(
       map.off("resize", compute);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [signature, corner, mapRef]);
+  }, [count, corners, mapRef]);
 
-  return slots;
+  return box;
 }
 
 /**
- * The column itself, drawn over the map canvas.
+ * The strip itself, drawn over the map canvas.
  *
  * Each mark is the dashed square the rest of the app uses for a coordinate
  * that is not a measurement - here with no coordinate at all behind it - and
- * carries its title beside it, because a column of identical marks in the
- * white space would be a puzzle rather than a list.
+ * carries its title beside it, because a row of identical marks in the white
+ * space would be a puzzle rather than a list.
  *
- * The marks sit on a panel rather than floating free. A margin on a map sheet
- * is a piece of paper, not a gap: it has an edge, and what is printed on it is
- * read as a list because the paper says so. Loose labels over the territory
- * read instead as things standing in it, faintly, which is the one reading
- * this whole column exists to prevent. The panel is nearly opaque so street
- * names do not run through the titles, and it is drawn once behind the whole
- * stack so the stack reads as one list and not as scattered notes.
+ * The marks sit on paper, not in a gap. A margin on a map sheet is part of
+ * the sheet: it has an edge, and what is printed on it is read as a list
+ * because the paper says so. Loose labels over the territory read instead as
+ * things standing in it, faintly, which is the one reading this whole strip
+ * exists to prevent. The paper is nearly opaque so street names do not run
+ * through the titles.
+ *
+ * It runs the full width of the perimeter because that is the width of the
+ * sheet. A small box tucked into one corner reads as a widget the map happens
+ * to carry; a strip that spans the frame reads as the frame's own footer, and
+ * says that these sources belong to this project rather than to a spot in it.
+ * Marks fill it from the right, the way the rest of the project reads.
  */
-
 export function MarginColumn({
-  slots,
+  box,
+  entries,
   selectedId,
   onSelect,
 }: {
-  slots: MarginSlot[];
+  box: MarginBox | null;
+  entries: MarginEntry[];
   selectedId?: string | null;
   onSelect: (id: string) => void;
 }) {
-  if (slots.length === 0) return null;
-
-  const panel = {
-    left: slots[0].x - PANEL_PAD,
-    top: slots[0].y - MARK_HEIGHT / 2 - PANEL_PAD,
-    width: COLUMN_WIDTH + PANEL_PAD,
-    height: (slots.length - 1) * STEP + MARK_HEIGHT + PANEL_PAD * 2,
-  };
+  if (!box || entries.length === 0) return null;
 
   return (
     <div className="pointer-events-none absolute inset-0 z-10">
       <div
-        aria-hidden
-        style={panel}
-        className="absolute rounded-md border border-rule bg-paper/95 shadow-sm backdrop-blur-[2px]"
-      />
-      {slots.map((slot) => (
-        <button
-          key={slot.id}
-          type="button"
-          onClick={() => onSelect(slot.id)}
-          style={{ left: slot.x, top: slot.y }}
-          className="pointer-events-auto absolute flex max-w-[180px] -translate-y-1/2 items-center gap-2 rounded px-1.5 py-0.5 text-left"
-        >
-          <span
-            aria-hidden
-            style={{
-              width: 14,
-              height: 14,
-              borderRadius: 2,
-              border: `2px dashed ${slot.color}`,
-              background: "#ffffff",
-              outline:
-                selectedId === slot.id ? "2px solid #23282d" : undefined,
-              outlineOffset: 2,
-            }}
-            className="shrink-0"
-          />
-          <span className="truncate text-[11px] text-ink-secondary">
-            {slot.title}
-          </span>
-        </button>
-      ))}
+        style={{ left: box.left, top: box.top, width: box.width }}
+        className="pointer-events-auto absolute flex flex-row-reverse flex-wrap items-center gap-x-5 gap-y-1 rounded-md border border-rule bg-paper/95 px-2 py-2 shadow-sm backdrop-blur-[2px]"
+      >
+        {entries.map((entry) => (
+          <button
+            key={entry.id}
+            type="button"
+            onClick={() => onSelect(entry.id)}
+            className="flex max-w-[180px] items-center gap-2 rounded px-1 py-0.5 text-right"
+          >
+            <span
+              aria-hidden
+              style={{
+                width: 14,
+                height: 14,
+                borderRadius: 2,
+                border: `2px dashed ${entry.color}`,
+                background: "#ffffff",
+                outline:
+                  selectedId === entry.id ? "2px solid #23282d" : undefined,
+                outlineOffset: 2,
+              }}
+              className="shrink-0"
+            />
+            <span className="truncate text-[11px] text-ink-secondary">
+              {entry.title}
+            </span>
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

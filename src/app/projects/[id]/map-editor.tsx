@@ -1032,7 +1032,7 @@ export function MapEditor({
   const labels = useMarginLabels(mapRef, galleryEntries, previewMode);
 
   // Sources with no location, stacked in the margin outside the perimeter's
-  // bottom-left corner. Entry order, because the order a group gathered its
+  // bottom edge. Entry order, because the order a group gathered its
   // reading is itself part of the record.
   const marginEntries: MarginEntry[] = visibleItems
     .filter((item) => item.geometry === null)
@@ -1042,10 +1042,10 @@ export function MapEditor({
       color: layerColor(item.layer_id),
     }));
 
-  // Pinned to the perimeter's corner whether or not the perimeter is drawn:
+  // Pinned to the perimeter's edge whether or not the perimeter is drawn:
   // hiding the outline is a display preference, and it should not take the
   // sources off the screen with it.
-  const marginSlots = useMarginColumn(
+  const marginBox = useMarginColumn(
     mapRef,
     marginEntries,
     projectPerimeter(surveyedGeometries(items))
@@ -1184,7 +1184,8 @@ export function MapEditor({
         )}
 
         <MarginColumn
-          slots={marginSlots}
+          box={marginBox}
+          entries={marginEntries}
           selectedId={selectedItemId}
           onSelect={setSelectedItemId}
         />
