@@ -39,8 +39,6 @@ export type MarginEntry = {
   color: string;
 };
 
-/** Below the perimeter's bottom edge, so the strip clears its own line. */
-const DROP = 12;
 /** How close to any edge of the canvas the strip may come. */
 const EDGE = 8;
 /**
@@ -65,7 +63,15 @@ function clamp(value: number, low: number, high: number): number {
 }
 
 /** Where the strip sits on screen, in canvas pixels. */
-export type MarginBox = { left: number; top: number; width: number };
+export type MarginBox = {
+  left: number;
+  top: number;
+  width: number;
+  /** True when the strip hangs below the frame's line, false when it sits
+   * above it. Only the corners away from the line are rounded, so the edge
+   * that touches the frame reads as joined to it. */
+  below: boolean;
+};
 
 /**
  * Where the margin strip sits on screen right now.
@@ -113,14 +119,6 @@ export function useMarginColumn(
         // back to the foot of the view.
         const sw = perimeter ? map.project(perimeter[0]) : null;
         const se = perimeter ? map.project(perimeter[1]) : null;
-        const want =
-          sw && se
-            ? { left: sw.x, top: se.y + DROP, width: se.x - sw.x }
-            : {
-                left: EDGE,
-                top: height - TOOLBAR - 80,
-                width: width - EDGE * 2,
-              };
 
         // The corners are geographic points, so nothing keeps them on screen,
         // and the usual case is the worst one. Opening a project fits the
@@ -135,14 +133,34 @@ export function useMarginColumn(
         // material is still in the project either way, and a reader who
         // cannot see it has been told something false about what was
         // gathered.
-        const strip = clamp(want.width, MIN_WIDTH, width - EDGE * 2);
+        const strip = clamp(
+          sw && se ? se.x - sw.x : width - EDGE * 2,
+          MIN_WIDTH,
+          width - EDGE * 2
+        );
         const perRow = Math.max(1, Math.floor(strip / MARK_WIDTH));
         const tall = Math.ceil(count / perRow) * ROW_HEIGHT + PANEL_PAD * 2;
+        const floor = height - TOOLBAR - tall;
+
+        // The strip's edge sits on the frame's bottom line, with nothing
+        // between them. A gap would make it a panel floating near the frame;
+        // flush, it is the frame's own footer, the way a title block belongs
+        // to a drawing sheet's border rather than lying beside it.
+        //
+        // Below that line when there is room, and above it when there is
+        // not. Opening a project fits the view to its items, so the usual
+        // case is a perimeter that reaches the foot of the canvas with no
+        // paper left under it - and a strip that answered by drifting upward
+        // would be touching nothing at all. Inside the frame it still reads
+        // as the frame's footer, because it is still on the line.
+        const bottom = se ? se.y : height - TOOLBAR;
+        const top = bottom <= floor ? bottom : bottom - tall;
 
         setBox({
-          left: clamp(want.left, EDGE, width - strip - EDGE),
-          top: clamp(want.top, EDGE, height - TOOLBAR - tall),
+          left: clamp(sw ? sw.x : EDGE, EDGE, width - strip - EDGE),
+          top: clamp(top, EDGE, floor),
           width: strip,
+          below: bottom <= floor,
         });
       });
     };
@@ -199,7 +217,9 @@ export function MarginColumn({
     <div className="pointer-events-none absolute inset-0 z-10">
       <div
         style={{ left: box.left, top: box.top, width: box.width }}
-        className="pointer-events-auto absolute flex flex-row-reverse flex-wrap items-center gap-x-5 gap-y-1 rounded-md border border-rule bg-paper/95 px-2 py-2 shadow-sm backdrop-blur-[2px]"
+        className={`pointer-events-auto absolute flex flex-row-reverse flex-wrap items-center gap-x-5 gap-y-1 border border-rule bg-paper/95 px-2 py-2 shadow-sm backdrop-blur-[2px] ${
+          box.below ? "rounded-b-md" : "rounded-t-md"
+        }`}
       >
         {entries.map((entry) => (
           <button
