@@ -295,7 +295,11 @@ export async function createItem(
     return { error: e instanceof Error ? e.message : "File upload failed." };
   }
   if (mediaUrl) {
-    media.push({ url: mediaUrl, type: "embed" });
+    const link = readHttpUrl(mediaUrl);
+    if ("error" in link) {
+      return link;
+    }
+    media.push({ url: link.url, type: "embed" });
   }
 
   const { error } = await supabase.from("items").insert({
@@ -476,6 +480,39 @@ export async function deleteItem(projectId: string, itemId: string) {
 // links, for instance) has no file to remove and is skipped.
 const BUCKET_MARKER = "/storage/v1/object/public/project-media/";
 
+/**
+ * A link a student typed, or the reason it cannot be stored.
+ *
+ * Only http and https. A URL goes into an `href` that is rendered to whoever
+ * opens the published map, and a `javascript:` or `data:` one in that slot is
+ * code that runs in a reader's browser under this site's origin - the group
+ * that typed it would be running script on every visitor to their own map.
+ * Nothing about a field labelled "link" suggests that, so the protocol is
+ * checked rather than trusted.
+ *
+ * One function for every path that accepts a URL. The edit path checked this
+ * and the create path did not, which is the only way a rule like this ever
+ * fails: not by being wrong, but by being in one place of two.
+ */
+function readHttpUrl(raw: string): { url: string } | { error: string } {
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    return { error: "A link is required." };
+  }
+
+  let parsed: URL;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    return { error: "That isn't a valid link." };
+  }
+  if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+    return { error: "Links must start with http:// or https://" };
+  }
+
+  return { url: trimmed };
+}
+
 function storagePathFromUrl(url: string): string | null {
   const at = url.indexOf(BUCKET_MARKER);
   if (at === -1) return null;
@@ -597,20 +634,11 @@ export async function updateItemUrl(
   itemId: string,
   url: string
 ): Promise<ActionResult> {
-  const trimmed = url.trim();
-  if (!trimmed) {
-    return { error: "A link is required." };
+  const link = readHttpUrl(url);
+  if ("error" in link) {
+    return link;
   }
-
-  let parsed: URL;
-  try {
-    parsed = new URL(trimmed);
-  } catch {
-    return { error: "That isn't a valid link." };
-  }
-  if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
-    return { error: "Links must start with http:// or https://" };
-  }
+  const trimmed = link.url;
 
   const supabase = await createClient();
   const {
