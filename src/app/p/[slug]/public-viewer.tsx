@@ -18,6 +18,7 @@ import {
   ensurePerimeterLayers,
   perimeterFeatures,
 } from "@/lib/perimeter";
+import { whenStyleReady } from "@/lib/map-ready";
 import {
   MarginLabels,
   useMarginLabels,
@@ -271,8 +272,7 @@ export function PublicViewer({
       source?.setData(perimeterFeatures(perimeter, project.name));
     };
 
-    if (map.isStyleLoaded()) update();
-    else map.once("load", update);
+    return whenStyleReady(map, update);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [perimeter && perimeter.flat().join(","), project.name, styleEpoch]);
 
@@ -397,8 +397,7 @@ export function PublicViewer({
       );
     };
 
-    if (map.isStyleLoaded()) apply();
-    else map.once("load", apply);
+    return whenStyleReady(map, apply);
   }, [project.base_map_image_url, project.base_map_bounds, styleEpoch]);
 
   // Base-map switching. A vector style is a whole style document, so it needs
@@ -416,8 +415,7 @@ export function PublicViewer({
       map.once("idle", () => setStyleEpoch((e) => e + 1));
     };
 
-    if (map.isStyleLoaded()) apply();
-    else map.once("load", apply);
+    return whenStyleReady(map, apply);
   }, [mapStyleId]);
 
   // Clicking bare map puts the open item away.
@@ -540,8 +538,7 @@ export function PublicViewer({
       polySource.setData({ type: "FeatureCollection", features: polyFeatures });
     };
 
-    if (map.isStyleLoaded()) update();
-    else map.once("load", update);
+    return whenStyleReady(map, update);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items, hiddenLayerIds, query, mode, layers, styleEpoch]);
 

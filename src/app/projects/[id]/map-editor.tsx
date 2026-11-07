@@ -22,6 +22,7 @@ import {
   ensurePerimeterLayers,
   perimeterFeatures,
 } from "@/lib/perimeter";
+import { whenStyleReady } from "@/lib/map-ready";
 import {
   MAP_STYLES,
   DEFAULT_STYLE_ID,
@@ -715,8 +716,7 @@ export function MapEditor({
       );
     };
 
-    if (map.isStyleLoaded()) apply();
-    else map.once("load", apply);
+    return whenStyleReady(map, apply);
   }, [mapStyleId]);
 
   // Custom base-map image overlay.
@@ -756,8 +756,7 @@ export function MapEditor({
       );
     };
 
-    if (map.isStyleLoaded()) applyOverlay();
-    else map.once("load", applyOverlay);
+    return whenStyleReady(map, applyOverlay);
   }, [project.base_map_image_url, project.base_map_bounds, styleEpoch]);
 
   // Set up shape sources/layers. Re-runs after a style swap, which discards
@@ -766,8 +765,7 @@ export function MapEditor({
     const map = mapRef.current;
     if (!map) return;
 
-    if (map.isStyleLoaded()) ensureShapeLayers(map);
-    else map.once("load", () => ensureShapeLayers(map));
+    return whenStyleReady(map, () => ensureShapeLayers(map));
   }, [styleEpoch]);
 
   // Click-to-place / draw-vertex handling.
@@ -845,10 +843,10 @@ export function MapEditor({
       map.on("mouseleave", "item-polygons-fill", clearPointer);
     };
 
-    if (map.isStyleLoaded()) attach();
-    else map.once("load", attach);
+    const stopWaiting = whenStyleReady(map, attach);
 
     return () => {
+      stopWaiting();
       map.off("click", "item-lines-layer", onFeatureClick);
       map.off("click", "item-polygons-fill", onFeatureClick);
       map.off("mouseenter", "item-lines-layer", showPointer);
@@ -903,8 +901,7 @@ export function MapEditor({
       });
     };
 
-    if (map.isStyleLoaded()) update();
-    else map.once("load", update);
+    return whenStyleReady(map, update);
   }, [drawPoints, pendingGeometry, styleEpoch]);
 
   // Render point-item markers.
@@ -1009,8 +1006,7 @@ export function MapEditor({
       source.setData(perimeterFeatures(perimeter, project.name));
     };
 
-    if (map.isStyleLoaded()) update();
-    else map.once("load", update);
+    return whenStyleReady(map, update);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [perimeter && perimeter.flat().join(","), project.name, styleEpoch]);
 
@@ -1091,8 +1087,7 @@ export function MapEditor({
       polySource.setData({ type: "FeatureCollection", features: polyFeatures });
     };
 
-    if (map.isStyleLoaded()) update();
-    else map.once("load", update);
+    return whenStyleReady(map, update);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items, hiddenLayerIds, activeTags, dateFrom, dateTo, query, layers, styleEpoch]);
 
