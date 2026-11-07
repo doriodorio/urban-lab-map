@@ -15,7 +15,7 @@ import type { PerimeterRing } from "@/lib/perimeter";
  * standing in it.
  *
  * So they are kept with no coordinate, and drawn beside the map instead of on
- * it: a column stepping down from the outside of the perimeter's bottom-left
+ * it: a column stepping down from the outside of the perimeter's bottom-right
  * corner, in the order the group gathered them. That is the oldest convention
  * a map sheet has - the margin, where the legend and the sources have always
  * lived, and which nobody has ever read as part of the territory.
@@ -46,17 +46,18 @@ const STEP = 22;
 /** Below the corner, so the first mark clears the perimeter's own line. */
 const DROP = 14;
 /**
- * How much room the column needs on its left, and how close to any edge it
- * may come. A mark is right-aligned on its anchor with its title running back
- * from it, so the anchor needs a label's width of canvas behind it.
+ * How much room the column needs to its right, and how close to any edge it
+ * may come. A mark is left-aligned on its anchor with its title running out
+ * from it, so the anchor needs a label's width of canvas ahead of it.
  */
 const COLUMN_WIDTH = 188;
 const EDGE = 8;
 /** Half a mark's height: a mark is centred on its anchor, not hung below it. */
 const HALF = 11;
 /**
- * Kept clear at the foot of the canvas for the drawing tools, which sit in
- * the bottom-left - the same corner the column is drawn from.
+ * Kept clear at the foot of the canvas for the drawing tools. They sit in the
+ * bottom-left, which the column no longer shares, but a label level with them
+ * still reads as part of that row rather than as material.
  */
 const TOOLBAR = 66;
 
@@ -82,7 +83,7 @@ export function useMarginColumn(
   const [slots, setSlots] = useState<MarginSlot[]>([]);
 
   const signature = entries.map((e) => `${e.id}:${e.color}`).join("|");
-  const corner = perimeter ? `${perimeter[0][0]},${perimeter[0][1]}` : "";
+  const corner = perimeter ? `${perimeter[1][0]},${perimeter[1][1]}` : "";
 
   useEffect(() => {
     const map = mapRef.current;
@@ -96,17 +97,19 @@ export function useMarginColumn(
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(() => {
         const canvas = map.getCanvas();
-        // perimeter[0] is the ring's south-west corner: the rectangle is
-        // built [SW, SE, NE, NW, SW].
+        // perimeter[1] is the ring's south-east corner: the rectangle is
+        // built [SW, SE, NE, NW, SW]. The column hangs off the right-hand
+        // side, which is the margin a Hebrew reader meets first, and which
+        // leaves the bottom-left to the drawing tools.
         //
         // A project whose only material so far is unplaced has no perimeter
         // to hang off - and that is exactly the project where losing the
         // column would be worst, because nothing else is on the map either.
-        // It falls back to the lower left of the view.
+        // It falls back to the lower right of the view.
         const at = perimeter
-          ? { x: map.project(perimeter[0]).x - GUTTER, y: map.project(perimeter[0]).y + DROP }
+          ? { x: map.project(perimeter[1]).x + GUTTER, y: map.project(perimeter[1]).y + DROP }
           : {
-              x: 220,
+              x: canvas.clientWidth - COLUMN_WIDTH - 32,
               y: canvas.clientHeight - 60 - (entries.length - 1) * STEP,
             };
 
@@ -114,7 +117,7 @@ export function useMarginColumn(
         // and the usual case is the worst one. Opening a project fits the
         // view to its items, which leaves the perimeter filling the canvas
         // with no white space outside it to put a margin in, so the column
-        // lands past the left edge and cannot even be clicked.
+        // lands past the right edge and cannot even be clicked.
         //
         // So the corner is where the column wants to be, not where it has to
         // be: it is held inside the canvas, and when the corner leaves the
@@ -126,7 +129,7 @@ export function useMarginColumn(
         const width = canvas.clientWidth;
         const height = canvas.clientHeight;
         const last = (entries.length - 1) * STEP;
-        const x = clamp(at.x, COLUMN_WIDTH, width - EDGE);
+        const x = clamp(at.x, EDGE, width - COLUMN_WIDTH);
         const y = clamp(
           at.y,
           EDGE + HALF,
@@ -184,11 +187,8 @@ export function MarginColumn({
           type="button"
           onClick={() => onSelect(slot.id)}
           style={{ left: slot.x, top: slot.y }}
-          className="pointer-events-auto absolute flex max-w-[180px] -translate-x-full -translate-y-1/2 items-center gap-2 rounded bg-paper/90 px-1.5 py-0.5 text-left"
+          className="pointer-events-auto absolute flex max-w-[180px] -translate-y-1/2 items-center gap-2 rounded bg-paper/90 px-1.5 py-0.5 text-left"
         >
-          <span className="truncate text-[11px] text-ink-secondary">
-            {slot.title}
-          </span>
           <span
             aria-hidden
             style={{
@@ -203,6 +203,9 @@ export function MarginColumn({
             }}
             className="shrink-0"
           />
+          <span className="truncate text-[11px] text-ink-secondary">
+            {slot.title}
+          </span>
         </button>
       ))}
     </div>

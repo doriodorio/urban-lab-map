@@ -1285,14 +1285,32 @@ export function MapEditor({
               </div>
             )}
 
-          {/* One segmented control rather than three separate pills: they're
-              mutually exclusive states of the same choice. */}
+          {/* One segmented control rather than four separate pills: they're
+              mutually exclusive answers to the same question, "where does
+              this go?".
+
+              The order is by use, not by geometry. Point and No place are
+              how material is filed - a photograph at a spot, a source at
+              none - and between them they take nearly every item a group
+              adds. Line and Region are for drawing a route or an area, which
+              a group does a few times a semester. The rule separates the two
+              jobs, so the pair reached for constantly sits first and the
+              reader is not made to walk past the rare tools to find them. */}
           <div className="flex items-center gap-1 rounded-md border border-rule bg-card p-1.5">
             <DrawTool
               label="Point"
               active={drawMode === "point"}
               onClick={() => toggleDrawMode("point")}
             />
+            <DrawTool
+              label="No place"
+              active={composingSource}
+              onClick={() => {
+                setDrawMode(null);
+                setComposingSource((on) => !on);
+              }}
+            />
+            <span className="mx-1 h-5 w-px bg-rule" />
             <DrawTool
               label="Line"
               active={drawMode === "line"}
@@ -1302,18 +1320,6 @@ export function MapEditor({
               label="Region"
               active={drawMode === "polygon"}
               onClick={() => toggleDrawMode("polygon")}
-            />
-            {/* The fourth answer to "where does this go?", which is why it
-                sits with the other three - but behind a rule, because it is
-                the one answer that does not involve the map. */}
-            <span className="mx-1 h-5 w-px bg-rule" />
-            <DrawTool
-              label="No place"
-              active={composingSource}
-              onClick={() => {
-                setDrawMode(null);
-                setComposingSource((on) => !on);
-              }}
             />
             {drawMode && (
               <span className="px-2 text-[12px] text-ink-secondary">
