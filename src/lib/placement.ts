@@ -39,6 +39,32 @@ export type Placement =
   | "unplaced"
   | null;
 
+/**
+ * The same vocabulary in words, for readers who do not have this file.
+ *
+ * It is written into every GeoJSON export. A `located_by` of "about" means
+ * nothing to QGIS, to a colleague opening the archive in five years, or to
+ * the student who graduated - and it is precisely the value that must not be
+ * mistaken for a measurement. The distinction only survives the tool if it
+ * travels with the data.
+ *
+ * Keyed by the stored value; "null" is spelled out because an export has to
+ * account for the rows that predate any of this.
+ */
+export const PLACEMENT_MEANINGS: Record<string, string> = {
+  photo:
+    "The coordinate came from the photograph's own GPS. The camera stood here, to within a few metres.",
+  moved:
+    "Began as a photograph's own GPS reading and was then moved by hand. The photograph vouches for the picture, not for the place.",
+  surveyed:
+    "Someone states they were here. An explicit claim rather than a measurement.",
+  about:
+    "The coordinate is the item's SUBJECT, not its origin. The material is about this place; it was not made here.",
+  unplaced:
+    "No location at all. The item carries no coordinate and is shown beside the map rather than on it.",
+  null: "Unknown. Recorded before the origin of coordinates was tracked; no precision is claimed for it.",
+};
+
 const CLAIMS: readonly string[] = [
   "photo",
   "moved",

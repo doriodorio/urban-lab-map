@@ -137,6 +137,29 @@ export default async function ProjectSettingsPage({
         />
       </section>
 
+      {/* Deliberately its own section rather than a line under Publishing.
+          Publishing is about showing the work to readers; this is about the
+          work surviving without us. A group should be able to leave with
+          their archive the way they would leave a library with their notes. */}
+      <section className="flex flex-col gap-3">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-secondary">
+          The archive
+        </h2>
+        <p className="max-w-[60ch] text-sm leading-relaxed text-ink-secondary">
+          Every item, its layer, its tags and what its coordinate claims, as a
+          GeoJSON file. It opens in QGIS and anything else that reads maps.
+          Items with no location are in the file with no coordinate, which is
+          the truth about them. Keep a copy at the end of the semester.
+        </p>
+        <a
+          href={`/projects/${project.id}/export`}
+          download
+          className="press self-start rounded-md border border-rule bg-card px-3.5 py-2 text-sm"
+        >
+          Download GeoJSON
+        </a>
+      </section>
+
       <section className="flex flex-col gap-3">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-secondary">
           Members
