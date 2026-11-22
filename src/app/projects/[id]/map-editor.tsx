@@ -23,6 +23,7 @@ import {
   perimeterFeatures,
 } from "@/lib/perimeter";
 import { whenStyleReady } from "@/lib/map-ready";
+import { useHere, MEASURED_WITHIN_METRES, type Fix } from "@/lib/here";
 import {
   MAP_STYLES,
   DEFAULT_STYLE_ID,
@@ -505,6 +506,16 @@ export function MapEditor({
   const [pendingGeometry, setPendingGeometry] = useState<Geometry | null>(
     null
   );
+  /**
+   * The device's own reading for the point being composed, when it was tight
+   * enough to count as one. Cleared with the form, so a reading never
+   * survives into an item it did not place.
+   */
+  const [deviceCoords, setDeviceCoords] = useState<[number, number] | null>(
+    null
+  );
+  /** Said once, under the toolbar, when a fix was too loose to be a claim. */
+  const [looseFix, setLooseFix] = useState<number | null>(null);
 
   // Held as an id and resolved against the current `items` on every render.
   // Storing the object itself would freeze a snapshot: marker click listeners
@@ -1142,6 +1153,34 @@ export function MapEditor({
     });
   }
 
+  /**
+   * Opens the new-item form on the spot the device reports.
+   *
+   * A loose fix is not thrown away. Someone indoors, or in a street the
+   * satellites cannot see into, still gets taken to roughly the right place,
+   * which beats scrolling across a city - it simply arrives as a point they
+   * placed, and the form asks what it means as usual. Only a tight reading
+   * is recorded as a measurement.
+   */
+  function useFix(fix: Fix) {
+    const map = mapRef.current;
+    setDrawMode(null);
+    setComposingSource(false);
+    setDrawPoints([]);
+    setPendingGeometry({ type: "Point", coordinates: fix.coordinates });
+    setDeviceCoords(fix.measured ? fix.coordinates : null);
+    setLooseFix(fix.measured ? null : fix.accuracy);
+    // Never zoom out. A group working at street level has chosen that scale,
+    // and the fix is a point on it, not a reason to leave.
+    map?.easeTo({
+      center: fix.coordinates,
+      zoom: Math.max(map.getZoom(), 16),
+      duration: 600,
+    });
+  }
+
+  const { locate, locating, error: hereError, clearError } = useHere(useFix);
+
   function toggleDrawMode(mode: DrawMode) {
     if (drawMode === mode) {
       setDrawMode(null);
@@ -1298,6 +1337,16 @@ export function MapEditor({
               active={drawMode === "point"}
               onClick={() => toggleDrawMode("point")}
             />
+            {/* The field button. A sound, a smell or the feel of a wall has
+                no file for the app to read, and those are exactly the things
+                that can only be recorded by standing there - so this is the
+                one tool whose answer is a measurement rather than a guess at
+                where you are on a map. */}
+            <DrawTool
+              label={locating ? "Locating…" : "Here"}
+              active={locating}
+              onClick={locate}
+            />
             <DrawTool
               label="No place"
               active={composingSource}
@@ -1325,6 +1374,22 @@ export function MapEditor({
               </span>
             )}
           </div>
+
+          {/* Under the toolbar rather than over the map: a message about a
+              tool belongs with the tool, and the map is where the answer
+              already is. */}
+          {hereError && (
+            <p className="max-w-[46ch] rounded-md border border-rule bg-card px-3 py-2 text-[12px] leading-relaxed text-ink-secondary">
+              {hereError}{" "}
+              <button
+                type="button"
+                onClick={clearError}
+                className="underline"
+              >
+                Dismiss
+              </button>
+            </p>
+          )}
         </div>
       </div>
 
@@ -1429,15 +1494,21 @@ export function MapEditor({
           <NewItemForm
             geometry={pendingGeometry}
             onGeometryChange={setPendingGeometry}
+            deviceCoords={deviceCoords}
+            looseAccuracy={looseFix}
             layers={layers}
             createItemAction={createItemAction}
             onDone={() => {
               setPendingGeometry(null);
               setComposingSource(false);
+              setDeviceCoords(null);
+              setLooseFix(null);
             }}
             onCancel={() => {
               setPendingGeometry(null);
               setComposingSource(false);
+              setDeviceCoords(null);
+              setLooseFix(null);
             }}
           />
         )}
@@ -2668,6 +2739,8 @@ function FileField({
 function NewItemForm({
   geometry,
   onGeometryChange,
+  deviceCoords,
+  looseAccuracy,
   layers,
   createItemAction,
   onDone,
@@ -2675,6 +2748,20 @@ function NewItemForm({
 }: {
   geometry: Geometry | null;
   onGeometryChange: (geometry: Geometry) => void;
+  /**
+   * Where the device measured, when this point came from the Here button and
+   * the fix was tight enough to be called a measurement. Null otherwise,
+   * including for a loose fix - the position is still offered then, but as
+   * an ordinary hand-placed point.
+   */
+  deviceCoords: [number, number] | null;
+  /**
+   * The radius the device admitted to, when that was too wide to record as a
+   * measurement. The point is still offered - a rough centre beats scrolling
+   * across a city - but the student is told why it is being treated as one
+   * they placed.
+   */
+  looseAccuracy: number | null;
   layers: Layer[];
   createItemAction: BoundAction;
   onDone: () => void;
@@ -2753,15 +2840,30 @@ function NewItemForm({
     (photoCoords[0] !== geometry.coordinates[0] ||
       photoCoords[1] !== geometry.coordinates[1]);
 
-  // Three answers, not two. Sitting exactly on the photograph's own point is a
-  // measurement; sitting somewhere else while still having come from a
-  // photograph that knew where it was is a demotion, not a blank. Compared
+  const deviceCoordsDiffer =
+    geometry?.type === "Point" &&
+    deviceCoords &&
+    (deviceCoords[0] !== geometry.coordinates[0] ||
+      deviceCoords[1] !== geometry.coordinates[1]);
+
+  // Three answers, not two. Sitting exactly on the instrument's own point is a
+  // measurement; sitting somewhere else while still having come from an
+  // instrument that knew where it was is a demotion, not a blank. Compared
   // rather than remembered, so nudging the pin changes the answer by itself.
-  const locatedBy = !photoCoords
-    ? null
-    : photoCoordsDiffer
+  //
+  // A photograph wins over a device fix where both exist, because the picture
+  // is the item and the reading belongs to it: a student who stood in one
+  // place and photographed something across the street is describing the
+  // thing photographed.
+  const locatedBy = photoCoords
+    ? photoCoordsDiffer
       ? "moved"
-      : "photo";
+      : "photo"
+    : deviceCoords
+      ? deviceCoordsDiffer
+        ? "moved"
+        : "device"
+      : null;
 
   // A photo is the substance of an image item and illustrative on a note or a
   // citation, so all of them offer the field - but only the first kind offers
@@ -2950,6 +3052,44 @@ function NewItemForm({
       {primary === "media" && mediaBlock}
       {primary === "audio" && audioBlock}
       {primary === "image" && imageBlock}
+
+      {looseAccuracy !== null && (
+        <p className="rounded-lg border border-rule bg-card px-2.5 py-2 text-xs leading-relaxed text-ink-secondary">
+          Your device is only sure of this to about {looseAccuracy}m, so it is
+          not recorded as a measurement — anything looser than{" "}
+          {MEASURED_WITHIN_METRES}m could be the wrong street. Drag the pin to
+          where you are standing, then say what it means.
+        </p>
+      )}
+
+      {/* Said rather than asked. The device has already answered the question
+          the fieldset below would put, and the student should be able to see
+          what is being recorded on their behalf - including that dragging
+          the pin gives the reading up. */}
+      {deviceCoords && !photoCoords && (
+        <p className="rounded-lg bg-blue-50 px-2.5 py-2 text-xs leading-relaxed text-blue-800">
+          {deviceCoordsDiffer ? (
+            <>
+              Moved off the measured spot. Recorded as a position someone set
+              by hand.{" "}
+              <button
+                type="button"
+                onClick={() =>
+                  onGeometryChange({ type: "Point", coordinates: deviceCoords })
+                }
+                className="font-medium underline"
+              >
+                Put it back
+              </button>
+            </>
+          ) : (
+            <>
+              Measured here by your device. Drag the pin and it becomes a
+              hand-placed point instead.
+            </>
+          )}
+        </p>
+      )}
 
       {/* Asked at the moment of entry, because nobody can reconstruct it in
           March. Required, and with nothing pre-selected: a default of "found

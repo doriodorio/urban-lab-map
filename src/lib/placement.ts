@@ -20,6 +20,10 @@ import type { Geometry } from "./perimeter";
  *                camera stood here, to within a few metres.
  *   'moved'    - began as one of those and was then moved by hand. The
  *                photograph still vouches for the picture, not for the place.
+ *   'device'   - the phone measured it while someone stood there. No
+ *                photograph to carry the reading, which is the usual case
+ *                for a sound, a smell or a surface: the person holding the
+ *                device is the instrument. A measurement, like 'photo'.
  *   'surveyed' - someone says they were here. A claim, not a measurement, but
  *                an explicit one.
  *   'about'    - the coordinate is the item's SUBJECT, not its origin. The
@@ -33,6 +37,7 @@ import type { Geometry } from "./perimeter";
  */
 export type Placement =
   | "photo"
+  | "device"
   | "moved"
   | "surveyed"
   | "about"
@@ -54,8 +59,10 @@ export type Placement =
 export const PLACEMENT_MEANINGS: Record<string, string> = {
   photo:
     "The coordinate came from the photograph's own GPS. The camera stood here, to within a few metres.",
+  device:
+    "The device measured this position while someone stood there, with no photograph to carry the reading. A measurement, in the same sense as 'photo'.",
   moved:
-    "Began as a photograph's own GPS reading and was then moved by hand. The photograph vouches for the picture, not for the place.",
+    "Began as an instrument's own reading - a photograph's GPS, or the device's - and was then moved by hand. The reading vouches for the material, not for the place.",
   surveyed:
     "Someone states they were here. An explicit claim rather than a measurement.",
   about:
@@ -67,6 +74,7 @@ export const PLACEMENT_MEANINGS: Record<string, string> = {
 
 const CLAIMS: readonly string[] = [
   "photo",
+  "device",
   "moved",
   "surveyed",
   "about",
@@ -89,12 +97,13 @@ const ALWAYS_SURVEYED = new Set(["sound", "smell", "touch"]);
 /**
  * Whether the form should ask what the coordinate means.
  *
- * Not for the senses, which answer themselves, and not when the photograph
- * has already answered - a camera's own GPS is a better witness than a tired
- * student at eleven at night, and asking anyway invites it to be overridden.
+ * Not for the senses, which answer themselves, and not when an instrument has
+ * already answered - a camera's own GPS, or the device's while someone stood
+ * there, is a better witness than a tired student at eleven at night, and
+ * asking anyway invites the reading to be overridden.
  */
-export function asksPlacement(type: string, fromPhoto: Placement): boolean {
-  return !ALWAYS_SURVEYED.has(type) && fromPhoto === null;
+export function asksPlacement(type: string, measured: Placement): boolean {
+  return !ALWAYS_SURVEYED.has(type) && measured === null;
 }
 
 /**
@@ -138,7 +147,8 @@ export function isUnplaced(item: { geometry: unknown }): boolean {
  * How a mark is drawn for each kind of claim, so the editor and the published
  * view cannot drift apart on what a shape means.
  *
- * Round for a measurement, square for a judgement, and dashed for a
+ * Round for a measurement - a photograph's GPS and the device's own fix are
+ * the same kind of claim - square for a judgement, and dashed for a
  * coordinate that is a subject rather than a position - the same dash the
  * perimeter is drawn with, which already means "an annotation over the map;
  * nothing on the ground marks this".
@@ -147,7 +157,8 @@ export function markStyle(
   located: string | null,
   color: string
 ): { size: number; borderRadius: string; border: string; background: string } {
-  const round = located === "photo" || located === "moved";
+  const round =
+    located === "photo" || located === "device" || located === "moved";
   const hollow = located === "moved" || located === "about";
   return {
     // A square reads as larger than a circle of the same width, so it is
