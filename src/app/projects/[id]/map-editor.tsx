@@ -34,6 +34,7 @@ import {
   RASTER_ATTRIBUTION,
 } from "@/lib/base-maps";
 import { ensureRtlTextSupport } from "@/lib/rtl-text";
+import { TYPE_OPTIONS } from "@/lib/item-types";
 import {
   MarginLabels,
   useMarginLabels,
@@ -151,24 +152,6 @@ function ensureShapeLayers(map: maplibregl.Map) {
 }
 const UNASSIGNED_COLOR = "#737373";
 
-const TYPE_OPTIONS: { value: string; label: string; bodyLabel: string }[] = [
-  { value: "text", label: "Text / Note", bodyLabel: "Notes, reflection…" },
-  { value: "quote", label: "Quote", bodyLabel: "The quoted text" },
-  { value: "interview", label: "Interview", bodyLabel: "Transcript (full or excerpt)" },
-  { value: "document", label: "Document / Citation", bodyLabel: "Description" },
-  { value: "data", label: "Data", bodyLabel: "A stat, number, or short data note" },
-  { value: "image", label: "Image", bodyLabel: "Caption" },
-  // The senses a street is recorded through besides looking. Kept as separate
-  // types rather than tags because they behave differently: sound carries a
-  // recording, smell and touch are described in words and can only be
-  // photographed at second hand.
-  { value: "sound", label: "Sound", bodyLabel: "What is heard here" },
-  { value: "smell", label: "Smell", bodyLabel: "What it smells of, and when" },
-  { value: "touch", label: "Touch / Material", bodyLabel: "Surface, texture, temperature" },
-  { value: "link", label: "Web link", bodyLabel: "What's at this link, and why it matters" },
-  { value: "video", label: "Video", bodyLabel: "Notes on the video" },
-  { value: "composite", label: "Composite (mixed)", bodyLabel: "Notes" },
-];
 
 /** Types whose whole point is a URL, so the field is shown prominently. */
 const URL_FIRST_TYPES = new Set(["link", "video"]);
@@ -1272,6 +1255,15 @@ export function MapEditor({
               way back out, so the bar reads as two things rather than five. */}
           <span aria-hidden className="h-4 w-px bg-ink/15" />
 
+          {/* The way out to the street. First of the project's own
+              destinations because it is the one with a time and a place: the
+              others are read at a desk, this one is opened while walking. */}
+          <Link
+            href={`/projects/${project.id}/field`}
+            className="press rounded-lg px-1 text-[13px] text-ink-secondary hover:text-ink"
+          >
+            Field
+          </Link>
           <Link
             href={`/projects/${project.id}/threads`}
             className="press rounded-lg px-1 text-[13px] text-ink-secondary hover:text-ink"
