@@ -52,6 +52,31 @@ type ItemRow = {
 };
 
 /**
+ * Where the same file sits inside a backup folder.
+ *
+ * The URLs in `media` point at Supabase, and the whole reason this file
+ * exists is to outlive Supabase. On the day it matters those links are dead,
+ * and the export becomes an index of photographs nobody can open.
+ *
+ * scripts/backup.mjs writes every object in the bucket to
+ * `media/<project-id>/<name>`, so the path within the bucket is also the path
+ * within the backup. Carrying it here is what lets the two halves be rejoined
+ * on a disconnected machine, years later, by anyone who has both folders and
+ * no account anywhere.
+ *
+ * Null for anything not served from our own bucket - an embedded YouTube or
+ * Vimeo link has no file of ours behind it, and inventing a path for one
+ * would promise a file the backup does not contain.
+ */
+const BUCKET_MARKER = "/storage/v1/object/public/project-media/";
+
+function backupPath(url: string): string | null {
+  const at = url.indexOf(BUCKET_MARKER);
+  if (at === -1) return null;
+  return `media/${decodeURIComponent(url.slice(at + BUCKET_MARKER.length))}`;
+}
+
+/**
  * A filename the browser will actually keep.
  *
  * Most of these projects are named in Hebrew, and a raw Hebrew name in a
@@ -161,7 +186,11 @@ export async function GET(
         tags: item.tags ?? [],
         date: item.date_start,
         added_at: item.created_at,
-        media: (item.media ?? []).map((m) => ({ url: m.url, type: m.type })),
+        media: (item.media ?? []).map((m) => ({
+          url: m.url,
+          type: m.type,
+          file: backupPath(m.url),
+        })),
       },
     };
   });
@@ -195,6 +224,8 @@ export async function GET(
        * read without the app, which is the only reason the file exists.
        */
       location_claims: PLACEMENT_MEANINGS,
+      media_note:
+        "Each media entry carries a `url` on Supabase and a `file` path. The path is where scripts/backup.mjs writes that same file, so an export and a backup folder together are a complete archive that needs no account and no network. A null `file` is material hosted elsewhere, such as an embedded video.",
       unplaced_note:
         "A feature with a null geometry has no location at all - a reading, a general source, a note on method. It was never given a coordinate, and none is invented here.",
       /**
