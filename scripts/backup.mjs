@@ -188,13 +188,25 @@ async function findPgDump() {
   return found[0]?.exe ?? "pg_dump";
 }
 
+/**
+ * No shell. Two reasons, both of them things that already went wrong:
+ *
+ * The path found above is "C:\Program Files\PostgreSQL\17\bin\pg_dump.exe",
+ * and a shell splits that at the space - the run failed with "'C:\Program' is
+ * not recognized", which reads like a missing program rather than a quoting
+ * bug. Spawning the executable directly has no command line to misparse.
+ *
+ * And the connection string carries the database password. Through a shell it
+ * becomes part of a command line; without one it is handed to the process as
+ * an argument and never composed into text anything else can see.
+ */
 async function dumpDatabase(dbUrl, destination) {
   const exe = await findPgDump();
   return new Promise((resolve) => {
     const child = spawn(
       exe,
       [dbUrl, "--no-owner", "--no-privileges", "--clean", "--if-exists", "-f", destination],
-      { stdio: ["ignore", "inherit", "pipe"], shell: process.platform === "win32" }
+      { stdio: ["ignore", "inherit", "pipe"] }
     );
 
     let stderr = "";
@@ -215,16 +227,49 @@ async function dumpDatabase(dbUrl, destination) {
 /**
  * Where this run should write: a new dated folder, or the unfinished one.
  *
- * The manifest is written last and only on completion, so a folder without
- * one is a run that was interrupted - the network dropped, the laptop slept,
- * someone pressed Ctrl+C at photograph 300 of 502. Continuing it is the whole
- * value of the resume check further down; starting a fresh folder instead
- * would download 429 MB again and leave a half-finished folder behind to be
- * mistaken for a backup later.
+ * A run can stop short in two ways - killed outright, leaving no manifest at
+ * all, or finished with something missing: the network dropped at photograph
+ * 300 of 502, or pg_dump failed. Either way the next run should continue that
+ * folder rather than open a new one, because starting fresh means fetching
+ * 429 MB again and leaving a half-finished folder behind to be mistaken for a
+ * backup later.
  *
  * A finished folder is never touched. Backups accumulate; they do not
  * overwrite each other.
  */
+/**
+ * Is this folder a finished backup, or a run that stopped short?
+ *
+ * The manifest is written at the end of every run, successful or not, because
+ * a record of what went wrong is worth more than no record. That makes its
+ * mere presence a poor test. This reads it: a folder counts as finished only
+ * if every file was saved and the database half either succeeded or was never
+ * asked for.
+ *
+ * The case this exists for actually happened. pg_dump failed on a quoting
+ * bug after all 502 files had been fetched; the folder had a manifest, so the
+ * next run called it finished, opened a new folder and began the 429 MB
+ * again - to reach the same failure.
+ *
+ * An unreadable manifest is treated as finished. Refusing to write a new
+ * backup because an old one is damaged is the wrong way to fail.
+ */
+async function isComplete(dir) {
+  const text = await fs
+    .readFile(path.join(dir, "manifest.json"), "utf8")
+    .catch(() => null);
+  if (text === null) return false;
+
+  try {
+    const m = JSON.parse(text);
+    const mediaWhole = (m.media?.failed ?? 0) === 0;
+    const dbWhole = m.database?.attempted ? m.database.ok === true : true;
+    return mediaWhole && dbWhole;
+  } catch {
+    return true;
+  }
+}
+
 async function chooseDirectory(outRoot) {
   const entries = await fs.readdir(outRoot, { withFileTypes: true }).catch(() => []);
   const dated = entries
@@ -233,14 +278,8 @@ async function chooseDirectory(outRoot) {
     .sort();
 
   const newest = dated.at(-1);
-  if (newest) {
-    const finished = await fs
-      .stat(path.join(outRoot, newest, "manifest.json"))
-      .then(() => true)
-      .catch(() => false);
-    if (!finished) {
-      return { dir: path.join(outRoot, newest), resumed: true };
-    }
+  if (newest && !(await isComplete(path.join(outRoot, newest)))) {
+    return { dir: path.join(outRoot, newest), resumed: true };
   }
 
   return { dir: path.join(outRoot, stamp()), resumed: false };
@@ -304,10 +343,12 @@ async function main() {
   console.log("\n");
 
   // --- the database, if the tools are here ---------------------------------
-  let database = { ok: false, reason: "no database URL given" };
+  // `attempted` is what lets the resume check above tell a deliberate
+  // media-only run from a run whose database half failed.
+  let database = { ok: false, attempted: false, reason: "no database URL given" };
   if (dbUrl) {
     console.log("Dumping the database…");
-    database = await dumpDatabase(dbUrl, path.join(dir, "database.sql"));
+    database = { attempted: true, ...(await dumpDatabase(dbUrl, path.join(dir, "database.sql"))) };
     console.log(database.ok ? "  done\n" : `  skipped: ${database.reason}\n`);
   }
 
