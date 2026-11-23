@@ -335,6 +335,9 @@ export function PublicViewer({
     const opening = projectPerimeter(surveyedGeometries(items));
     const map = new maplibregl.Map({
       container: mapContainer.current,
+      // Same reason as the editor: expanded, the credit wraps to two lines on
+      // a phone and covers the bottom of the map. One tap away instead.
+      attributionControl: { compact: true },
       style: initialStyle(project.base_map_style ?? DEFAULT_STYLE_ID),
       center: DEFAULT_CENTER,
       zoom: DEFAULT_ZOOM,

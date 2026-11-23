@@ -145,3 +145,21 @@ body {
     --ink-muted: #5a6167;
   }
 }
+
+/* MapLibre puts its own controls at z-index 2 inside the map container, which
+   is above anything of ours that only relies on source order. On a desktop
+   this never showed, because the controls hug the right edge and our overlays
+   sit on the left. At 375px they collide head on: measured there, the
+   attribution bar wraps to two lines, spans the full width and covers the
+   drawing toolbar, and the navigation control occupies the top-right corner
+   where the Panel button has to go.
+
+   The toolbar's own z-index is raised in the component. This moves the
+   navigation control down, below that button, rather than hiding it - two
+   fingers rotate the map by accident on a phone, and the compass is how a
+   student gets north back. */
+@media (max-width: 767px) {
+  .maplibregl-ctrl-top-right {
+    margin-top: 3.25rem;
+  }
+}

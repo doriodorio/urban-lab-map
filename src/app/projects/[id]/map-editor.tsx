@@ -524,6 +524,16 @@ export function MapEditor({
   // panel wouldn't show up on reopening it.
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const selectedItem = items.find((i) => i.id === selectedItemId) ?? null;
+  // Below md the side panel cannot stand beside the map - it is 384px wide on
+  // a 375px screen - so it becomes a sheet over the map, closed by default.
+  //
+  // Derived rather than kept in an effect: the panel opens itself whenever it
+  // holds something the tap just produced. Without that, selecting a marker or
+  // pressing "Here" on a phone looks like it did nothing at all, because the
+  // result appears in a panel that is off-screen.
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const sheetShown =
+    sheetOpen || Boolean(selectedItem || pendingGeometry || composingSource);
   const [panel, setPanel] = useState<
     "layers" | "filters" | "import" | "basemap" | "trash" | null
   >("layers");
@@ -627,6 +637,11 @@ export function MapEditor({
     const opening = projectPerimeter(surveyedGeometries(items));
     const map = new maplibregl.Map({
       container: mapContainer.current,
+      // Collapsed to a single button. Expanded, the attribution wraps to two
+      // lines on a phone, spans the full width and sits on top of the
+      // toolbar - measured at 375px, 64px of a 812px screen. Compact keeps
+      // the credit one tap away, which is what the licence asks for.
+      attributionControl: { compact: true },
       style: initial.kind === "vector" ? initial.url : buildRasterStyle(initial),
       center: DEFAULT_CENTER,
       zoom: DEFAULT_ZOOM,
@@ -1209,9 +1224,23 @@ export function MapEditor({
     (drawMode === "polygon" && drawPoints.length >= 3);
 
   return (
-    <div className="flex h-screen w-full">
+    // dvh, not vh: on a phone 100vh counts the space under the browser's own
+    // chrome, which would put the toolbar below the visible edge.
+    <div className="relative flex h-dvh w-full">
       <div className="relative flex-1">
         <div ref={mapContainer} className="h-full w-full" />
+
+        {/* The way back to the panel once it has been closed. Top right
+            because the project chip holds the top left and the drawing tools
+            hold the bottom; on a 375px screen those are the only two edges
+            already spoken for. */}
+        <button
+          type="button"
+          onClick={() => setSheetOpen(true)}
+          className="press absolute right-3 top-3 z-20 rounded-md border border-rule bg-card px-3 py-2 text-[13px] md:hidden"
+        >
+          Panel
+        </button>
 
         {previewMode && (
           <MarginLabels labels={labels} onSelect={setSelectedItemId} />
@@ -1224,7 +1253,10 @@ export function MapEditor({
           onSelect={setSelectedItemId}
         />
 
-        <div className="absolute left-3 top-3 flex items-center gap-3 rounded-md border border-rule bg-card px-3.5 py-2">
+        {/* Right-bounded below md, short of the Panel button, and scrolling
+            sideways within those bounds: at 375px this row measured 500px
+            wide and ran clean off the screen. */}
+        <div className="absolute left-3 top-3 flex items-center gap-3 rounded-md border border-rule bg-card px-3.5 py-2 max-md:right-20 max-md:overflow-x-auto max-md:[&>*]:shrink-0">
           <Link
             href="/projects"
             className="press rounded-lg px-1 text-[13px] text-ink-secondary hover:text-ink"
@@ -1295,7 +1327,15 @@ export function MapEditor({
           )}
         </div>
 
-        <div className="absolute bottom-3 left-3 flex flex-col items-start gap-2">
+        {/* Bounded on the right as well, so that on a narrow screen the row of
+            drawing tools scrolls sideways within the viewport instead of
+            running off the edge of it.
+
+            Transparent to clicks, with the boxes inside it taking them back:
+            the strip now reaches the full width of the map, and without this
+            it would swallow every click along the bottom of the canvas -
+            including the one that places a point there. */}
+        <div className="absolute bottom-3 left-3 right-3 z-10 flex flex-col items-start gap-2 pointer-events-none max-md:bottom-12 [&>*]:pointer-events-auto">
           {/* Finish/Cancel appear above the tools, anchored to them, so the
               choice shows up next to the thing that raised it. */}
           {(drawMode === "line" || drawMode === "polygon") &&
@@ -1331,7 +1371,7 @@ export function MapEditor({
               a group does a few times a semester. The rule separates the two
               jobs, so the pair reached for constantly sits first and the
               reader is not made to walk past the rare tools to find them. */}
-          <div className="flex items-center gap-1 rounded-md border border-rule bg-card p-1.5">
+          <div className="flex max-w-full items-center gap-1 overflow-x-auto rounded-md border border-rule bg-card p-1.5">
             <DrawTool
               label="Point"
               active={drawMode === "point"}
@@ -1395,7 +1435,31 @@ export function MapEditor({
 
       {/* Widened from 320px: five tabs plus an item detail panel were fighting
           for the same strip, and "Base map" wrapped. */}
-      <aside className="flex w-96 flex-col overflow-y-auto border-l border-rule bg-card">
+      {/* Beside the map on a desktop; a sheet over it on a phone, where 384px
+          of panel and 375px of screen cannot both exist. The map keeps its
+          full width underneath either way. */}
+      <aside
+        className={`flex flex-col overflow-y-auto border-rule bg-card transition-transform duration-200 max-md:absolute max-md:inset-x-0 max-md:bottom-0 max-md:z-30 max-md:h-[68dvh] max-md:rounded-t-xl max-md:border-t max-md:shadow-[0_-8px_24px_rgba(0,0,0,0.14)] md:w-96 md:border-l ${
+          sheetShown
+            ? ""
+            : "max-md:pointer-events-none max-md:translate-y-full"
+        }`}
+      >
+        {/* Only reachable below md, where the panel covers the map. Clearing
+            the selection as well is deliberate: leaving an item selected
+            behind a closed sheet leaves the map marked up with no way to see
+            why. */}
+        <button
+          type="button"
+          onClick={() => {
+            setSheetOpen(false);
+            setSelectedItemId(null);
+          }}
+          className="press sticky top-0 z-20 flex h-10 w-full shrink-0 items-center justify-center border-b border-rule bg-card md:hidden"
+        >
+          <span aria-hidden className="h-1 w-9 rounded-full bg-ink/20" />
+          <span className="sr-only">Close the panel</span>
+        </button>
         {/* Search sits above the tabs rather than inside Filters: it's reached
             constantly, and shouldn't cost a tab switch to get to. */}
         <SearchBox
@@ -1406,7 +1470,7 @@ export function MapEditor({
           onSelectResult={focusItem}
         />
 
-        <div className="sticky top-0 z-10 flex border-b border-rule bg-card">
+        <div className="sticky top-0 z-10 flex border-b border-rule bg-card max-md:top-10">
           <PanelTab
             label="Layers"
             active={panel === "layers"}
