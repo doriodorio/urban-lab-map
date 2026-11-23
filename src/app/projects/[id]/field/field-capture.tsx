@@ -56,17 +56,14 @@ const TYPE_FOR: Record<Capture["kind"], string> = {
 /**
  * Why the microphone did not open, in terms of what to do about it.
  *
- * These four failures need four different things from the person and only one
- * of them is helped by pressing the button again, so they are not collapsed
- * into "not allowed" - which is what the first version of this screen said to
+ * These failures need different things from the person and only one of them
+ * is helped by pressing the button again, so they are not collapsed into "not
+ * allowed" - which is what the first version of this screen said to
  * everybody, including the person whose microphone was simply busy.
  */
 function describeMic(error: unknown): string {
   const name = error instanceof DOMException ? error.name : "";
   switch (name) {
-    case "NotAllowedError":
-    case "PermissionDeniedError":
-      return "This site is not allowed to use the microphone. Tap the padlock or ⓘ beside the address, turn Microphone on, then try again.";
     case "NotFoundError":
     case "DevicesNotFoundError":
       return "No microphone was found on this device.";
@@ -78,6 +75,66 @@ function describeMic(error: unknown): string {
     default:
       return "The microphone could not be started on this device.";
   }
+}
+
+/** Where the operating system keeps the browser's own microphone permission. */
+function devicePath(): string {
+  const ua = navigator.userAgent;
+  if (/Android/i.test(ua)) {
+    return "Settings → Apps → your browser → Permissions → Microphone";
+  }
+  if (/iPhone|iPad|iPod/i.test(ua)) {
+    return "Settings → your browser → Microphone";
+  }
+  return "your system's privacy settings, under Microphone";
+}
+
+/**
+ * Whether it is this site that is blocked, or the browser itself.
+ *
+ * "Not allowed" has two causes on a phone and they live in opposite places.
+ * The site can be blocked, which is undone behind the icon in the address
+ * bar. Or the browser app can be missing the permission at the level of the
+ * operating system - and then no prompt is ever shown, the request simply
+ * fails, and nothing in the address bar will help. That is the one that
+ * actually happened here, and the screen used to send people to the padlock
+ * for it, where there was nothing to find.
+ *
+ * The browser will say whether the SITE is blocked. It cannot see the
+ * operating system's answer - so a refusal, in a page the browser does not
+ * consider blocked, points at the layer above. That is an inference rather
+ * than a reading, and the wording says "likely" because of it.
+ *
+ * Firefox and Safari decline the question entirely; there the person gets
+ * both places to look.
+ */
+async function siteMicPermission(): Promise<PermissionState | null> {
+  try {
+    const status = await navigator.permissions.query({
+      name: "microphone" as PermissionName,
+    });
+    return status.state;
+  } catch {
+    return null;
+  }
+}
+
+async function diagnoseMic(error: unknown): Promise<string> {
+  const name = error instanceof DOMException ? error.name : "";
+  if (name !== "NotAllowedError" && name !== "PermissionDeniedError") {
+    return describeMic(error);
+  }
+
+  const site = await siteMicPermission();
+
+  if (site === "denied") {
+    return "This site is blocked from using the microphone. Tap the icon beside the address, then Permissions → Microphone → Allow, and try again.";
+  }
+  if (site === null) {
+    return `The microphone was refused. Two places decide this: the icon beside the address (Permissions → Microphone), and ${devicePath()}. If the second one is off, no prompt is ever shown here.`;
+  }
+  // 'prompt' or 'granted': the site is not the obstacle.
+  return `This site is not blocked, so your browser itself most likely has no microphone permission on this device — and then nothing is ever asked here. Open ${devicePath()}, allow it, restart the browser, and try again.`;
 }
 
 /**
@@ -221,7 +278,7 @@ export function FieldCapture({
       setStage({ at: "recording" });
       beginCapture();
     } catch (error) {
-      setStage({ at: "micFailed", reason: describeMic(error) });
+      setStage({ at: "micFailed", reason: await diagnoseMic(error) });
     }
   }, [beginCapture]);
 
