@@ -43,6 +43,11 @@ next-env.d.ts
 # Source material staged for import (originals live on Dori's machine and in
 # Drive; the app's copies live in Supabase Storage). Keeping multi-MB photos
 # out of git.
+# Backups made by scripts/backup.mjs: the whole archive, photographs and all.
+# Never in git - it is large, it is the students' material, and the repository
+# is public.
+/backups/
+
 /charityboxes/
 /urbanlabmaptool from zip/
 /shushan/
