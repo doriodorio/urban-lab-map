@@ -35,8 +35,16 @@ type Capture =
 type Stage =
   | { at: "home" }
   | { at: "recording" }
+  | { at: "micFailed"; reason: string }
   | { at: "writing" }
   | { at: "details"; capture: Capture };
+
+/** A recording in progress, owned here so that nothing can leave it running. */
+type Take = {
+  recorder: MediaRecorder;
+  stream: MediaStream;
+  chunks: BlobPart[];
+};
 
 /** The item type each button starts from. Changeable on the details screen. */
 const TYPE_FOR: Record<Capture["kind"], string> = {
@@ -44,6 +52,33 @@ const TYPE_FOR: Record<Capture["kind"], string> = {
   sound: "sound",
   text: "text",
 };
+
+/**
+ * Why the microphone did not open, in terms of what to do about it.
+ *
+ * These four failures need four different things from the person and only one
+ * of them is helped by pressing the button again, so they are not collapsed
+ * into "not allowed" - which is what the first version of this screen said to
+ * everybody, including the person whose microphone was simply busy.
+ */
+function describeMic(error: unknown): string {
+  const name = error instanceof DOMException ? error.name : "";
+  switch (name) {
+    case "NotAllowedError":
+    case "PermissionDeniedError":
+      return "This site is not allowed to use the microphone. Tap the padlock or ⓘ beside the address, turn Microphone on, then try again.";
+    case "NotFoundError":
+    case "DevicesNotFoundError":
+      return "No microphone was found on this device.";
+    case "NotReadableError":
+    case "TrackStartError":
+      return "The microphone is busy — another app or tab has it. Close that, then try again.";
+    case "SecurityError":
+      return "This page is not on a secure connection, so the microphone cannot be used.";
+    default:
+      return "The microphone could not be started on this device.";
+  }
+}
 
 /**
  * What this coordinate will claim, given how it was arrived at.
@@ -102,6 +137,7 @@ export function FieldCapture({
   const mapRef = useRef<maplibregl.Map | null>(null);
   const markerRef = useRef<maplibregl.Marker | null>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
+  const takeRef = useRef<Take | null>(null);
 
   const [stage, setStage] = useState<Stage>({ at: "home" });
   const [fix, setFix] = useState<Fix | null>(null);
@@ -137,6 +173,88 @@ export function FieldCapture({
     locate();
   }, [clearError, locate]);
 
+  /** Hand the microphone back. Called on every way out of a recording. */
+  const releaseMic = useCallback(() => {
+    const take = takeRef.current;
+    if (!take) return;
+    if (take.recorder.state === "recording") {
+      take.recorder.onstop = null;
+      take.recorder.stop();
+    }
+    take.stream.getTracks().forEach((t) => t.stop());
+    takeRef.current = null;
+  }, []);
+
+  /**
+   * Ask for the microphone from inside the tap, and only then for the
+   * position.
+   *
+   * Two reasons, both of them things that went wrong on a real phone. A
+   * browser grants a permission prompt to a gesture, and the request used to
+   * happen in an effect a render later, by which time the tap no longer
+   * counted for it. And the position was requested in the same instant as the
+   * microphone - a browser shows one permission prompt at a time and refuses
+   * the second outright, so asking for both at once is asking to be refused.
+   *
+   * Recording also begins here rather than on the next screen, which is what
+   * the first seconds of a passing bus are worth.
+   */
+  const startRecording = useCallback(async () => {
+    setSavedTitle(null);
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setStage({
+        at: "micFailed",
+        reason: "This browser cannot record audio.",
+      });
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      const chunks: BlobPart[] = [];
+      recorder.ondataavailable = (e) => {
+        if (e.data.size) chunks.push(e.data);
+      };
+      recorder.start();
+      takeRef.current = { recorder, stream, chunks };
+      setStage({ at: "recording" });
+      beginCapture();
+    } catch (error) {
+      setStage({ at: "micFailed", reason: describeMic(error) });
+    }
+  }, [beginCapture]);
+
+  const finishRecording = useCallback(
+    (seconds: number) => {
+      const take = takeRef.current;
+      if (!take || take.recorder.state !== "recording") return;
+
+      take.recorder.onstop = () => {
+        const type = take.recorder.mimeType || "audio/webm";
+        const blob = new Blob(take.chunks, { type });
+        // The extension matters: the upload names the stored object from it,
+        // and a recording saved as .bin is one nothing will offer to play.
+        const file = new File([blob], `recording.${extensionFor(type)}`, {
+          type,
+        });
+        take.stream.getTracks().forEach((t) => t.stop());
+        takeRef.current = null;
+        setStage({
+          at: "details",
+          capture: {
+            kind: "sound",
+            file,
+            url: URL.createObjectURL(blob),
+            seconds,
+          },
+        });
+      };
+      take.recorder.stop();
+    },
+    []
+  );
+
   // --- the map ------------------------------------------------------------
   useEffect(() => {
     if (!mapContainer.current || mapRef.current) return;
@@ -162,6 +280,9 @@ export function FieldCapture({
       markerRef.current = null;
     };
   }, [styleId]);
+
+  // Leaving the page must never leave the microphone open.
+  useEffect(() => releaseMic, [releaseMic]);
 
   // --- the pin ------------------------------------------------------------
   useEffect(() => {
@@ -202,7 +323,8 @@ export function FieldCapture({
     mapRef.current?.resize();
   }, [stage]);
 
-  const discard = useCallback(() => {
+  const goHome = useCallback(() => {
+    releaseMic();
     setStage((current) => {
       if (current.at === "details" && current.capture.kind !== "text") {
         URL.revokeObjectURL(current.capture.url);
@@ -212,20 +334,15 @@ export function FieldCapture({
     setFix(null);
     setCoords(null);
     setMoved(false);
-  }, []);
+  }, [releaseMic]);
 
-  const onSaved = useCallback((title: string) => {
-    setStage((current) => {
-      if (current.at === "details" && current.capture.kind !== "text") {
-        URL.revokeObjectURL(current.capture.url);
-      }
-      return { at: "home" };
-    });
-    setSavedTitle(title);
-    setFix(null);
-    setCoords(null);
-    setMoved(false);
-  }, []);
+  const onSaved = useCallback(
+    (title: string) => {
+      goHome();
+      setSavedTitle(title);
+    },
+    [goHome]
+  );
 
   return (
     <div className="relative flex h-dvh w-full flex-col bg-paper">
@@ -280,10 +397,7 @@ export function FieldCapture({
             beginCapture();
             cameraRef.current?.click();
           }}
-          onSound={() => {
-            beginCapture();
-            setStage({ at: "recording" });
-          }}
+          onSound={startRecording}
           onWrite={() => {
             beginCapture();
             setStage({ at: "writing" });
@@ -306,19 +420,19 @@ export function FieldCapture({
           }}
           createItemAction={createItemAction}
           onSaved={onSaved}
-          onDiscard={discard}
+          onDiscard={goHome}
         />
       )}
 
       {stage.at === "recording" && (
-        <Recorder
-          onDone={(file, url, seconds) =>
-            setStage({
-              at: "details",
-              capture: { kind: "sound", file, url, seconds },
-            })
-          }
-          onCancel={discard}
+        <Recorder onStop={finishRecording} onCancel={goHome} />
+      )}
+
+      {stage.at === "micFailed" && (
+        <MicFailed
+          reason={stage.reason}
+          onRetry={startRecording}
+          onBack={goHome}
         />
       )}
 
@@ -327,7 +441,7 @@ export function FieldCapture({
           onDone={(body) =>
             setStage({ at: "details", capture: { kind: "text", body } })
           }
-          onCancel={discard}
+          onCancel={goHome}
         />
       )}
     </div>
@@ -398,141 +512,88 @@ function CaptureButton({
 }
 
 /**
- * Recording, and nothing else on the screen.
+ * The timer, and a way to stop.
  *
- * It starts on its own. Reaching this screen is already the decision to
- * record, and a second button between that decision and the microphone costs
- * the first seconds of whatever was worth recording.
+ * The microphone was obtained and the recorder started before this screen
+ * existed, so there is no permission to wait for here and nothing that can
+ * fail. All this does is count and stop.
  */
 function Recorder({
-  onDone,
+  onStop,
   onCancel,
 }: {
-  onDone: (file: File, url: string, seconds: number) => void;
+  onStop: (seconds: number) => void;
   onCancel: () => void;
 }) {
   const [seconds, setSeconds] = useState(0);
-  const [error, setError] = useState<string | null>(null);
-  const [live, setLive] = useState(false);
-  const recorderRef = useRef<MediaRecorder | null>(null);
-  const chunksRef = useRef<BlobPart[]>([]);
-  const streamRef = useRef<MediaStream | null>(null);
 
   useEffect(() => {
-    let abandoned = false;
-
-    const start = async () => {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          audio: true,
-        });
-        if (abandoned) {
-          stream.getTracks().forEach((t) => t.stop());
-          return;
-        }
-        streamRef.current = stream;
-        const recorder = new MediaRecorder(stream);
-        recorderRef.current = recorder;
-        recorder.ondataavailable = (e) => {
-          if (e.data.size) chunksRef.current.push(e.data);
-        };
-        recorder.start();
-        setLive(true);
-      } catch {
-        // One message, because the three ways this fails need the same thing
-        // from the person: permission, in the browser's own settings.
-        setError(
-          "This browser is not allowed to use the microphone. Allow it for this site, then try again."
-        );
-      }
-    };
-
-    void start();
-
-    return () => {
-      abandoned = true;
-      // Always release the microphone. A recorder left running keeps the
-      // phone's recording indicator lit, which is alarming and correct to be
-      // alarmed about.
-      if (recorderRef.current?.state === "recording") {
-        recorderRef.current.stop();
-      }
-      streamRef.current?.getTracks().forEach((t) => t.stop());
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!live) return;
     const tick = setInterval(() => setSeconds((s) => s + 1), 1000);
     return () => clearInterval(tick);
-  }, [live]);
-
-  const stop = () => {
-    const recorder = recorderRef.current;
-    if (!recorder || recorder.state !== "recording") return;
-
-    recorder.onstop = () => {
-      const type = recorder.mimeType || "audio/webm";
-      const blob = new Blob(chunksRef.current, { type });
-      // The extension matters: the upload names the stored object from it,
-      // and a recording saved as .bin is one nothing will offer to play.
-      const file = new File([blob], `recording.${extensionFor(type)}`, {
-        type,
-      });
-      streamRef.current?.getTracks().forEach((t) => t.stop());
-      onDone(file, URL.createObjectURL(blob), seconds);
-    };
-    recorder.stop();
-  };
+  }, []);
 
   return (
     <div className="absolute inset-0 z-40 flex flex-col items-center justify-center gap-6 bg-paper px-6">
-      {error ? (
-        <>
-          <p className="max-w-sm text-center text-[14px] text-ink-secondary">
-            {error}
-          </p>
-          <button
-            type="button"
-            onClick={onCancel}
-            className="press rounded-xl border border-rule px-5 py-3 text-[15px]"
-          >
-            Back
-          </button>
-        </>
-      ) : (
-        <>
-          <div className="flex flex-col items-center gap-2">
-            <span
-              aria-hidden
-              className={`h-4 w-4 rounded-full ${
-                live ? "animate-pulse bg-red-600" : "bg-ink/20"
-              }`}
-            />
-            <p className="display text-[40px] tabular-nums leading-none">
-              {clock(seconds)}
-            </p>
-            <p className="text-[13px] text-ink-secondary">
-              {live ? "Recording" : "Asking for the microphone…"}
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={stop}
-            disabled={!live}
-            className="press w-full max-w-xs rounded-xl bg-ink px-5 py-4 text-[16px] font-medium text-paper disabled:opacity-60"
-          >
-            Stop
-          </button>
-          <button
-            type="button"
-            onClick={onCancel}
-            className="press text-[14px] text-ink-secondary underline"
-          >
-            Throw it away
-          </button>
-        </>
-      )}
+      <div className="flex flex-col items-center gap-2">
+        <span aria-hidden className="h-4 w-4 animate-pulse rounded-full bg-red-600" />
+        <p className="display text-[40px] tabular-nums leading-none">
+          {clock(seconds)}
+        </p>
+        <p className="text-[13px] text-ink-secondary">Recording</p>
+      </div>
+      <button
+        type="button"
+        onClick={() => onStop(seconds)}
+        className="press w-full max-w-xs rounded-xl bg-ink px-5 py-4 text-[16px] font-medium text-paper"
+      >
+        Stop
+      </button>
+      <button
+        type="button"
+        onClick={onCancel}
+        className="press text-[14px] text-ink-secondary underline"
+      >
+        Throw it away
+      </button>
+    </div>
+  );
+}
+
+/**
+ * The microphone did not open, and what to do about it.
+ *
+ * With a way to try again. The first version of this screen told people to
+ * change a setting and then offered them only a way back out, which meant
+ * doing as it asked led nowhere.
+ */
+function MicFailed({
+  reason,
+  onRetry,
+  onBack,
+}: {
+  reason: string;
+  onRetry: () => void;
+  onBack: () => void;
+}) {
+  return (
+    <div className="absolute inset-0 z-40 flex flex-col items-center justify-center gap-5 bg-paper px-6">
+      <p className="max-w-sm text-center text-[14px] leading-relaxed text-ink-secondary">
+        {reason}
+      </p>
+      <button
+        type="button"
+        onClick={onRetry}
+        className="press w-full max-w-xs rounded-xl bg-ink px-5 py-4 text-[16px] font-medium text-paper"
+      >
+        Try again
+      </button>
+      <button
+        type="button"
+        onClick={onBack}
+        className="press text-[14px] text-ink-secondary underline"
+      >
+        Back
+      </button>
     </div>
   );
 }
