@@ -70,7 +70,11 @@ async function readEnv(root) {
       ".env.local is missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY"
     );
   }
-  return { url: url.replace(/\/+$/, ""), key };
+  // SUPABASE_DB_URL may live here too. It carries the database password, so
+  // .env.local - already ignored by git, and never shipped to a browser
+  // because the name has no NEXT_PUBLIC_ prefix - is a better home for it
+  // than a shell history or a command line.
+  return { url: url.replace(/\/+$/, ""), key, dbUrl: env.SUPABASE_DB_URL ?? null };
 }
 
 /**
@@ -155,10 +159,40 @@ async function downloadFile({ url }, file, destination) {
  * leave out the half that decides who may read what. If the tool is missing,
  * this half is skipped loudly rather than approximated.
  */
+/**
+ * Where pg_dump is, which on Windows is usually not on PATH.
+ *
+ * The EnterpriseDB installer leaves its bin directory out of PATH unless you
+ * tick a box, so the tool is installed and invisible. Telling someone their
+ * backup failed because of an environment variable, when the program is
+ * sitting on their disk, is a worse answer than looking for it.
+ */
+async function findPgDump() {
+  if (process.platform !== "win32") return "pg_dump";
+
+  const roots = ["C:\\Program Files\\PostgreSQL", "C:\\Program Files (x86)\\PostgreSQL"];
+  const found = [];
+  for (const root of roots) {
+    const versions = await fs.readdir(root).catch(() => []);
+    for (const v of versions) {
+      const exe = path.join(root, v, "bin", "pg_dump.exe");
+      if (await fs.stat(exe).then(() => true).catch(() => false)) {
+        found.push({ version: Number.parseInt(v, 10) || 0, exe });
+      }
+    }
+  }
+
+  // Newest first: a dump taken with an older pg_dump than the server can be
+  // rejected outright, while a newer one reads an older server happily.
+  found.sort((a, b) => b.version - a.version);
+  return found[0]?.exe ?? "pg_dump";
+}
+
 async function dumpDatabase(dbUrl, destination) {
+  const exe = await findPgDump();
   return new Promise((resolve) => {
     const child = spawn(
-      "pg_dump",
+      exe,
       [dbUrl, "--no-owner", "--no-privileges", "--clean", "--if-exists", "-f", destination],
       { stdio: ["ignore", "inherit", "pipe"], shell: process.platform === "win32" }
     );
@@ -224,7 +258,8 @@ async function main() {
   const root = process.cwd();
   const creds = await readEnv(root);
   const outRoot = arg("out") ?? path.join(root, "backups");
-  const dbUrl = arg("db-url") ?? process.env.SUPABASE_DB_URL ?? null;
+  const dbUrl =
+    arg("db-url") ?? process.env.SUPABASE_DB_URL ?? creds.dbUrl ?? null;
   const { dir, resumed } = await chooseDirectory(outRoot);
 
   await fs.mkdir(dir, { recursive: true });
