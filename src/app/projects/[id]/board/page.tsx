@@ -96,18 +96,44 @@ export default async function BoardPage({
   const items = itemsResult.data ?? [];
   const onBoard = items.filter((i) => i.canvas !== null);
 
-  // Only the links whose ends are both on the board. A line to a card that
-  // is not here would have nowhere to land, and drawing it to the edge would
-  // suggest a direction that means nothing.
-  const onBoardIds = new Set(onBoard.map((i) => i.id));
-  const { data: linkRows } = onBoardIds.size
-    ? await supabase
-        .from("item_links")
-        .select("id, item_a, item_b, note")
-        .in("item_a", [...onBoardIds])
-    : { data: [] };
+  /**
+   * Every link with at least one end on the board - not only the ones with
+   * both.
+   *
+   * A link whose far end is missing used to be dropped here, which put the
+   * board back in the state that made links useless in the first place: a
+   * relationship nobody can see is a relationship nobody makes. If a card is
+   * connected to something, that something belongs on the board too, whether
+   * or not anyone thought to fetch it.
+   *
+   * It arrives as a card that has not been placed - see `ghosts` in board.tsx
+   * - so the board shows the connection without anybody's layout being
+   * written for them.
+   *
+   * Two queries rather than one `or`: the filter is a list of ids on each
+   * side, and an `or` of two `in`s has to be built as a string, which is the
+   * kind of query that breaks silently on an id containing the wrong
+   * character.
+   */
+  const onBoardIds = [...new Set(onBoard.map((i) => i.id))];
+  const [fromRows, toRows] = onBoardIds.length
+    ? await Promise.all([
+        supabase
+          .from("item_links")
+          .select("id, item_a, item_b, note")
+          .in("item_a", onBoardIds),
+        supabase
+          .from("item_links")
+          .select("id, item_a, item_b, note")
+          .in("item_b", onBoardIds),
+      ])
+    : [{ data: [] }, { data: [] }];
 
-  const links = (linkRows ?? []).filter((l) => onBoardIds.has(l.item_b));
+  const links = [
+    ...new Map(
+      [...(fromRows.data ?? []), ...(toRows.data ?? [])].map((l) => [l.id, l])
+    ).values(),
+  ];
 
   return (
     <Board

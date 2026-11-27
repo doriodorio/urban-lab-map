@@ -174,6 +174,69 @@ export function Board({
     [layers]
   );
 
+  /**
+   * Cards for things that are connected to the board but have not been put
+   * on it.
+   *
+   * A link with one end missing is a relationship nobody can see, which is
+   * the condition that made links go unused in the first place - eight of
+   * them across thirteen projects. So anything joined to a card on the board
+   * appears beside it, whether or not somebody thought to fetch it.
+   *
+   * It appears without being written. Placing a card is a decision about
+   * layout, and filling in that decision on somebody's behalf is the same
+   * backfill this column was careful not to do. A ghost becomes a real card
+   * the moment it is dragged or kept, and not before.
+   *
+   * Its position is derived from the anchor's, around a ring, with the angle
+   * taken from the id - so it sits in the same place on every render instead
+   * of moving each time the board is opened.
+   */
+  const ghosts = useMemo(() => {
+    const placed = new Set(Object.keys(spots));
+    const found = new Map<string, { item: Item; spot: CanvasSpot }>();
+
+    for (const link of links) {
+      const anchorId = placed.has(link.item_a)
+        ? link.item_a
+        : placed.has(link.item_b)
+          ? link.item_b
+          : null;
+      if (!anchorId) continue;
+
+      const farId = anchorId === link.item_a ? link.item_b : link.item_a;
+      if (placed.has(farId) || found.has(farId)) continue;
+
+      const item = byId.get(farId);
+      const anchorSpot = spots[anchorId];
+      if (!item || !anchorSpot) continue;
+
+      // A stable angle per item, so the ring does not reshuffle itself.
+      let hash = 0;
+      for (let i = 0; i < farId.length; i += 1) {
+        hash = (hash * 31 + farId.charCodeAt(i)) % 360;
+      }
+      const angle = (hash / 360) * Math.PI * 2;
+      const radius = 340;
+      found.set(farId, {
+        item,
+        spot: {
+          x: Math.round(anchorSpot.x + Math.cos(angle) * radius),
+          y: Math.round(anchorSpot.y + Math.sin(angle) * radius),
+          w: 200,
+        },
+      });
+    }
+
+    return found;
+  }, [links, spots, byId]);
+
+  /** Where a card is, whether it is really on the board or only showing. */
+  const anySpot = useCallback(
+    (id: string): CanvasSpot | null => spots[id] ?? ghosts.get(id)?.spot ?? null,
+    [spots, ghosts]
+  );
+
   /** Screen pixels to board units. */
   const toBoard = useCallback(
     (clientX: number, clientY: number) => {
@@ -190,11 +253,11 @@ export function Board({
   const boxOf = useCallback(
     (id: string) => {
       const item = byId.get(id);
-      const spot = spots[id];
+      const spot = anySpot(id);
       if (!item || !spot) return null;
       return { x: spot.x, y: spot.y, w: spot.w, h: cardHeight(item, spot.w) };
     },
-    [byId, spots]
+    [byId, anySpot]
   );
 
   const save = useCallback(
@@ -479,6 +542,19 @@ export function Board({
     router.refresh();
   };
 
+  /**
+   * Turn a showing card into a placed one, where it already appears.
+   *
+   * At its own position rather than in the middle of the screen: it has been
+   * sitting there next to the thing it is connected to, and moving it on the
+   * way to being kept would undo the only reason it was legible.
+   */
+  const keepGhost = async (id: string, spot: CanvasSpot) => {
+    setOverrides((current) => ({ ...current, [id]: spot }));
+    await save(id, spot);
+    router.refresh();
+  };
+
   const pullIn = async (id: string) => {
     const spot = spotInView();
     setOverrides((current) => ({ ...current, [id]: spot }));
@@ -658,6 +734,40 @@ export function Board({
               />
             )}
           </svg>
+
+          {/* Connected, but nobody has put it here. Dashed and quiet, so it
+              reads as "this exists and is joined to that" rather than as part
+              of the arrangement. One tap keeps it. */}
+          {[...ghosts.values()].map(({ item, spot }) => (
+            <div
+              key={`ghost-${item.id}`}
+              onPointerDown={(e) => {
+                if (connectingFrom) {
+                  e.stopPropagation();
+                  void finishConnection(item.id);
+                  return;
+                }
+                e.stopPropagation();
+              }}
+              className="absolute flex flex-col overflow-hidden rounded-xl border border-dashed border-ink/30 bg-card/70 p-2.5"
+              style={{ left: spot.x, top: spot.y, width: spot.w }}
+            >
+              <p className="text-[10px] uppercase tracking-wide text-ink-muted">
+                {typeLabel(item.type)} · connected
+              </p>
+              <p dir="auto" className="display truncate text-[14px] leading-tight">
+                {item.title || "Untitled"}
+              </p>
+              <button
+                type="button"
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={() => void keepGhost(item.id, spot)}
+                className="press mt-1.5 self-start rounded-md border border-rule px-2 py-1 text-[11px]"
+              >
+                Keep it here
+              </button>
+            </div>
+          ))}
 
           {onBoard.map((item) => {
             const spot = spots[item.id];
