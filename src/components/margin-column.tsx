@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import type * as maplibregl from "maplibre-gl";
 import type { PerimeterRing } from "@/lib/perimeter";
@@ -206,11 +207,22 @@ export function MarginColumn({
   entries,
   selectedId,
   onSelect,
+  boardHref,
 }: {
   box: MarginBox | null;
   entries: MarginEntry[];
   selectedId?: string | null;
   onSelect: (id: string) => void;
+  /**
+   * Where this strip leads, when it leads anywhere.
+   *
+   * The strip is what the material without a location gets instead of a pin,
+   * and a strip is somewhere to put a leftover rather than somewhere to work.
+   * So it is also the door to the board, where that material can actually be
+   * arranged and joined up. Absent in the published view, which has nothing
+   * to arrange.
+   */
+  boardHref?: string;
 }) {
   if (!box || entries.length === 0) return null;
 
@@ -248,6 +260,15 @@ export function MarginColumn({
             </span>
           </button>
         ))}
+
+        {boardHref && (
+          <Link
+            href={boardHref}
+            className="press ml-auto shrink-0 rounded px-1.5 py-0.5 text-[11px] text-ink-muted underline decoration-dotted underline-offset-2 hover:text-ink"
+          >
+            Open the board →
+          </Link>
+        )}
       </div>
     </div>
   );

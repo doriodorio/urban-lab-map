@@ -1234,6 +1234,7 @@ export function MapEditor({
           entries={marginEntries}
           selectedId={selectedItemId}
           onSelect={setSelectedItemId}
+          boardHref={`/projects/${project.id}/board`}
         />
 
         {/* Right-bounded below md, short of the Panel button, and scrolling
@@ -1263,6 +1264,14 @@ export function MapEditor({
             className="press rounded-lg px-1 text-[13px] text-ink-secondary hover:text-ink"
           >
             Field
+          </Link>
+          {/* The other view of the same archive: what has no coordinate, and
+              the connections between things. */}
+          <Link
+            href={`/projects/${project.id}/board`}
+            className="press rounded-lg px-1 text-[13px] text-ink-secondary hover:text-ink"
+          >
+            Board
           </Link>
           <Link
             href={`/projects/${project.id}/threads`}
