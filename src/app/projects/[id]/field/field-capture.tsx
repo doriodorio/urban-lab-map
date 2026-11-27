@@ -8,6 +8,7 @@ import { initialStyle, DEFAULT_CENTER, DEFAULT_STYLE_ID } from "@/lib/base-maps"
 import { ensureRtlTextSupport } from "@/lib/rtl-text";
 import { useHere, MEASURED_WITHIN_METRES, type Fix } from "@/lib/here";
 import { TYPE_OPTIONS } from "@/lib/item-types";
+import { preparePhoto } from "../photo-import";
 
 type Layer = { id: string; name: string; color: string | null };
 type ActionResult = { error?: string; success?: boolean };
@@ -28,12 +29,21 @@ const STREET_ZOOM = 17;
  * evening; the sound cannot.
  */
 type Capture =
-  | { kind: "photo"; file: File; url: string }
+  | {
+      kind: "photo";
+      file: File;
+      url: string;
+      /** Bytes the camera produced, before preparePhoto shrank it. */
+      cameraBytes: number;
+      /** The date the photograph says it was taken, if it says. */
+      exifDate: string | null;
+    }
   | { kind: "sound"; file: File; url: string; seconds: number }
   | { kind: "text"; body: string };
 
 type Stage =
   | { at: "home" }
+  | { at: "preparing" }
   | { at: "recording" }
   | { at: "micFailed"; reason: string }
   | { at: "writing" }
@@ -158,10 +168,20 @@ async function diagnoseMic(error: unknown): Promise<string> {
  * corrected afterwards. That is the one line this tool does not cross: a
  * coordinate recorded as measured has to have been measured.
  */
-function placementFor(fix: Fix | null, moved: boolean) {
-  if (!fix) return "unplaced";
-  if (!fix.measured) return "surveyed";
-  return moved ? "moved" : "device";
+function placementFor(
+  fix: Fix | null,
+  fromPhoto: boolean,
+  moved: boolean
+) {
+  if (fix) {
+    if (!fix.measured) return "surveyed";
+    return moved ? "moved" : "device";
+  }
+  // The camera answered where the browser would not. Its GPS is a
+  // measurement in the same sense a device reading is, and the vocabulary
+  // already has a word for it.
+  if (fromPhoto) return moved ? "moved" : "photo";
+  return "unplaced";
 }
 
 function extensionFor(mimeType: string) {
@@ -199,6 +219,8 @@ export function FieldCapture({
   const [stage, setStage] = useState<Stage>({ at: "home" });
   const [fix, setFix] = useState<Fix | null>(null);
   const [coords, setCoords] = useState<[number, number] | null>(null);
+  /** Where the photograph's own GPS says it was taken, when it carries one. */
+  const [photoCoords, setPhotoCoords] = useState<[number, number] | null>(null);
   const [moved, setMoved] = useState(false);
   const [savedTitle, setSavedTitle] = useState<string | null>(null);
 
@@ -226,9 +248,68 @@ export function FieldCapture({
     setSavedTitle(null);
     setFix(null);
     setCoords(null);
+    setPhotoCoords(null);
     setMoved(false);
     locate();
   }, [clearError, locate]);
+
+  /**
+   * Put a photograph from the camera through the same pipeline the editor
+   * uses, instead of uploading whatever the camera produced.
+   *
+   * This screen was sending the file up untouched, and it showed: the four
+   * photographs taken through it came in at 1.4 to 2.4 MB, against about
+   * 0.9 MB for the same kind of picture imported at a desk - one of them the
+   * second largest object in the whole bucket. Since this screen is where
+   * fieldwork will now arrive from, that was the leak.
+   *
+   * preparePhoto scales to the long edge the project settled on, bakes in the
+   * EXIF orientation so portrait photographs are not stored on their side,
+   * and converts HEIC - which Chrome and Firefox cannot display at all, so an
+   * iPhone photograph uploaded raw is a broken image for most readers.
+   *
+   * It also reads the photograph's own GPS, and that is worth having here:
+   * when the browser's geolocation has failed or is still thinking, the
+   * camera may already know where it stood.
+   *
+   * If any of it fails the original is uploaded as it is. The capture is the
+   * part that cannot be repeated; a large file is a far smaller loss than a
+   * lost one.
+   */
+  const takePhoto = useCallback(
+    async (file: File) => {
+      setStage({ at: "preparing" });
+
+      let ready: File = file;
+      let exifDate: string | null = null;
+      try {
+        const prepared = await preparePhoto(file);
+        ready = prepared.file;
+        exifDate = prepared.date;
+        if (prepared.coordinates) {
+          const at = prepared.coordinates;
+          setPhotoCoords(at);
+          // Only where nothing better exists: a reading taken by pressing the
+          // button belongs to this moment, and the photograph's may not.
+          setCoords((current) => current ?? at);
+        }
+      } catch {
+        // HEIC conversion is the one that throws. Upload the original.
+      }
+
+      setStage({
+        at: "details",
+        capture: {
+          kind: "photo",
+          file: ready,
+          url: URL.createObjectURL(ready),
+          cameraBytes: file.size,
+          exifDate,
+        },
+      });
+    },
+    []
+  );
 
   /** Hand the microphone back. Called on every way out of a recording. */
   const releaseMic = useCallback(() => {
@@ -390,6 +471,7 @@ export function FieldCapture({
     });
     setFix(null);
     setCoords(null);
+    setPhotoCoords(null);
     setMoved(false);
   }, [releaseMic]);
 
@@ -438,11 +520,8 @@ export function FieldCapture({
           // Cancelling the camera fires this with nothing, and must leave the
           // screen exactly as it was.
           if (!file) return;
-          setStage({
-            at: "details",
-            capture: { kind: "photo", file, url: URL.createObjectURL(file) },
-          });
           e.target.value = "";
+          void takePhoto(file);
         }}
       />
 
@@ -467,6 +546,7 @@ export function FieldCapture({
           capture={stage.capture}
           layers={layers}
           fix={fix}
+          fromPhoto={photoCoords !== null}
           coords={coords}
           moved={moved}
           locating={locating}
@@ -479,6 +559,20 @@ export function FieldCapture({
           onSaved={onSaved}
           onDiscard={goHome}
         />
+      )}
+
+      {stage.at === "preparing" && (
+        <div className="absolute inset-0 z-40 flex flex-col items-center justify-center gap-3 bg-paper px-6">
+          <span
+            aria-hidden
+            className="h-4 w-4 animate-pulse rounded-full bg-ink/30"
+          />
+          <p className="text-[14px] text-ink-secondary">Preparing the photo…</p>
+          <p className="max-w-xs text-center text-[12px] text-ink-muted">
+            An iPhone photograph is converted here, which takes a few seconds
+            the first time.
+          </p>
+        </div>
       )}
 
       {stage.at === "recording" && (
@@ -711,6 +805,7 @@ function Details({
   capture,
   layers,
   fix,
+  fromPhoto,
   coords,
   moved,
   locating,
@@ -723,6 +818,7 @@ function Details({
   capture: Capture;
   layers: Layer[];
   fix: Fix | null;
+  fromPhoto: boolean;
   coords: [number, number] | null;
   moved: boolean;
   locating: boolean;
@@ -741,7 +837,7 @@ function Details({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const placement = placementFor(fix, moved);
+  const placement = placementFor(fix, fromPhoto, moved);
   const bodyLabel =
     TYPE_OPTIONS.find((t) => t.value === type)?.bodyLabel ?? "Notes";
 
@@ -763,7 +859,13 @@ function Details({
         JSON.stringify({ type: "Point", coordinates: coords })
       );
     }
-    if (capture.kind === "photo") form.set("image", capture.file);
+    if (capture.kind === "photo") {
+      form.set("image", capture.file);
+      // The day the photograph says it was taken. Usually today, and worth
+      // keeping for the times it is not - a picture taken on the walk and
+      // filed that evening, or the next morning.
+      if (capture.exifDate) form.set("date_start", capture.exifDate);
+    }
     if (capture.kind === "sound") form.set("media_file", capture.file);
 
     const result = await createItemAction({}, form);
@@ -780,12 +882,20 @@ function Details({
       {/* What was captured, shown rather than described, so there is no doubt
           which recording is about to be filed. */}
       {capture.kind === "photo" && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={capture.url}
-          alt=""
-          className="h-32 w-full rounded-lg object-cover"
-        />
+        <div className="flex flex-col gap-1">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={capture.url}
+            alt=""
+            className="h-32 w-full rounded-lg object-cover"
+          />
+          {capture.file.size < capture.cameraBytes && (
+            <p className="text-[12px] text-ink-secondary">
+              {Math.round(capture.cameraBytes / 1024)} KB from the camera,{" "}
+              {Math.round(capture.file.size / 1024)} KB stored.
+            </p>
+          )}
+        </div>
       )}
       {capture.kind === "sound" && (
         <div className="flex flex-col gap-1">
@@ -809,6 +919,8 @@ function Details({
           `Measured here, to within ${fix?.accuracy} m. Recorded as a device reading.`}
         {placement === "moved" &&
           `Measured to within ${fix?.accuracy} m, then moved by hand. Recorded as moved: the reading vouches for the material, not for the spot.`}
+        {placement === "photo" &&
+          "Your browser could not place you, but the photograph's own GPS could. Recorded as a camera reading."}
         {placement === "surveyed" &&
           `Your device is only sure to within ${fix?.accuracy} m, wider than the ${MEASURED_WITHIN_METRES} m this tool calls a measurement. Drag the pin onto the right spot. Recorded as a stated location, not a measured one.`}
         {placement === "unplaced" &&
