@@ -113,19 +113,37 @@ export function Board({
   const surface = useRef<HTMLDivElement>(null);
 
   /**
-   * Positions are held here while a drag is in flight and written when it
-   * ends.
+   * Where every card is: the server's answer, with this session's unsaved
+   * gestures laid over it.
    *
-   * A card has to follow the finger at the frame rate; a round trip per
+   * A card has to follow the finger at the frame rate, and a round trip per
    * pointer move would both lag and write hundreds of rows for one gesture.
-   * The server copy is the truth between sessions, this is the truth during
-   * one.
+   * So a drag writes here first and the row afterwards.
+   *
+   * Derived rather than copied once, which is the bug this replaces: seeding
+   * a state variable from the props on first mount meant a card created on
+   * the server existed in the database, came back in the next render, and was
+   * invisible until the page was reloaded by hand - because the layer that
+   * decides what is on the board had never heard of it.
+   *
+   * An override is dropped only when its save fails, so what is on screen
+   * goes back to what is actually stored rather than quietly disagreeing with
+   * it. Null means taken off the board.
    */
-  const [spots, setSpots] = useState<Record<string, CanvasSpot>>(() =>
-    Object.fromEntries(
-      items.filter((i) => i.canvas).map((i) => [i.id, i.canvas as CanvasSpot])
-    )
+  const [overrides, setOverrides] = useState<Record<string, CanvasSpot | null>>(
+    {}
   );
+  const spots = useMemo(() => {
+    const base: Record<string, CanvasSpot> = {};
+    for (const item of items) {
+      if (item.canvas) base[item.id] = item.canvas;
+    }
+    for (const [id, spot] of Object.entries(overrides)) {
+      if (spot === null) delete base[id];
+      else base[id] = spot;
+    }
+    return base;
+  }, [items, overrides]);
   const [view, setView] = useState({ x: 120, y: 80, scale: 1 });
   const [selected, setSelected] = useState<string | null>(null);
   const [connectingFrom, setConnectingFrom] = useState<string | null>(null);
@@ -176,6 +194,13 @@ export function Board({
       const result = await setItemCanvasAction(projectId, itemId, spot);
       if (result.error) {
         setError(result.error);
+        // Put the card back where it actually is, rather than leaving the
+        // screen showing a move that did not happen.
+        setOverrides((current) => {
+          const next = { ...current };
+          delete next[itemId];
+          return next;
+        });
         router.refresh();
       }
     },
@@ -262,7 +287,7 @@ export function Board({
     const dx = (e.clientX - from.pointerX) / view.scale;
     const dy = (e.clientY - from.pointerY) / view.scale;
 
-    setSpots((current) => ({
+    setOverrides((current) => ({
       ...current,
       [from.id]:
         from.mode === "move"
@@ -329,18 +354,14 @@ export function Board({
 
   const pullIn = async (id: string) => {
     const spot = spotInView();
-    setSpots((current) => ({ ...current, [id]: spot }));
+    setOverrides((current) => ({ ...current, [id]: spot }));
     setPicking(false);
     await save(id, spot);
     router.refresh();
   };
 
   const takeOff = async (id: string) => {
-    setSpots((current) => {
-      const next = { ...current };
-      delete next[id];
-      return next;
-    });
+    setOverrides((current) => ({ ...current, [id]: null }));
     setSelected(null);
     await save(id, null);
     router.refresh();
