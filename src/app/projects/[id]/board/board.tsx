@@ -4,6 +4,8 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { TYPE_OPTIONS } from "@/lib/item-types";
+import { preparePhoto } from "../photo-import";
+import { linkHost } from "@/lib/embed";
 import type { CanvasSpot } from "./board-actions";
 
 type Media = { url: string; type: string };
@@ -78,6 +80,7 @@ export function Board({
   layers,
   setItemCanvasAction,
   createBoardItemAction,
+  createItemAction,
   createItemLinkAction,
   deleteItemLinkAction,
 }: {
@@ -101,6 +104,11 @@ export function Board({
       spot: CanvasSpot;
     }
   ) => Promise<Result & { id?: string }>;
+  createItemAction: (
+    projectId: string,
+    prevState: Result,
+    formData: FormData
+  ) => Promise<Result>;
   createItemLinkAction: (
     projectId: string,
     itemId: string,
@@ -352,6 +360,125 @@ export function Board({
     };
   }, [toBoard]);
 
+  // --- dropping things onto it --------------------------------------------
+  const [dropping, setDropping] = useState(false);
+  const [busy, setBusy] = useState<string | null>(null);
+
+  /**
+   * A name worth reading in a list, from a file or a URL.
+   *
+   * The filename without its extension, or the host, because a board of
+   * cards called "IMG_4471" and "a1b2c3.pdf" is a board nobody can search.
+   * It is only a starting point - the title is editable like any other.
+   */
+  const nameFor = (file: File) =>
+    file.name.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").trim() ||
+    "Untitled";
+
+  /**
+   * What was dropped, turned into an item of the right kind.
+   *
+   * Images go through preparePhoto, the same pipeline the camera and the
+   * import panel use - scaled, HEIC converted, orientation baked in. One
+   * upload path for the whole app means a photograph dropped here cannot
+   * quietly be three times the size of the same photograph imported there,
+   * which is exactly the drift that happened once already.
+   *
+   * Everything arrives unplaced. A file dragged onto a board is not a claim
+   * that it was found anywhere, and the one thing this column must never do
+   * is invent a location.
+   */
+  const dropOne = useCallback(
+    async (payload: { file?: File; url?: string; text?: string }, spot: CanvasSpot) => {
+      const form = new FormData();
+      form.set("located_by", "unplaced");
+      form.set("canvas", JSON.stringify(spot));
+
+      if (payload.file) {
+        const file = payload.file;
+        form.set("title", nameFor(file));
+        if (file.type.startsWith("image/")) {
+          form.set("type", "image");
+          try {
+            const prepared = await preparePhoto(file);
+            form.set("image", prepared.file);
+          } catch {
+            form.set("image", file);
+          }
+        } else if (file.type.startsWith("audio/")) {
+          form.set("type", "sound");
+          form.set("media_file", file);
+        } else if (file.type.startsWith("video/")) {
+          form.set("type", "video");
+          form.set("media_file", file);
+        } else {
+          form.set("type", "document");
+          form.set("media_file", file);
+        }
+      } else if (payload.url) {
+        form.set("type", "link");
+        form.set("title", linkHost(payload.url) ?? payload.url.slice(0, 60));
+        form.set("media_url", payload.url);
+        form.set("attribution", payload.url);
+      } else if (payload.text) {
+        const text = payload.text.trim();
+        form.set("type", "text");
+        // The first line names it; the whole thing is the note. A pasted
+        // paragraph has no title of its own and inventing one from nowhere
+        // would be worse than a truncated first line.
+        form.set("title", text.split(/\r?\n/)[0].slice(0, 80) || "Note");
+        form.set("body", text);
+      } else {
+        return;
+      }
+
+      const result = await createItemAction(projectId, {}, form);
+      if (result.error) setError(result.error);
+    },
+    [createItemAction, projectId]
+  );
+
+  const onDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    setDropping(false);
+
+    const at = toBoard(e.clientX, e.clientY);
+    const files = [...e.dataTransfer.files];
+    const uri = e.dataTransfer.getData("text/uri-list").trim();
+    const text = e.dataTransfer.getData("text/plain").trim();
+
+    const payloads: { file?: File; url?: string; text?: string }[] = files.length
+      ? files.map((file) => ({ file }))
+      : uri && /^https?:\/\//i.test(uri)
+        ? [{ url: uri }]
+        : text && /^https?:\/\//i.test(text)
+          ? [{ url: text }]
+          : text
+            ? [{ text }]
+            : [];
+
+    if (!payloads.length) return;
+
+    setBusy(
+      payloads.length === 1 ? "Adding it…" : `Adding ${payloads.length} things…`
+    );
+    // In sequence, not at once: ten photographs through the resizer in
+    // parallel is ten canvases of a phone camera's worth of pixels, which is
+    // how a browser tab runs out of memory on a laptop.
+    let i = 0;
+    for (const payload of payloads) {
+      await dropOne(payload, {
+        // Cascaded, so a batch does not land as one card on top of another.
+        x: Math.round(at.x - DEFAULT_WIDTH / 2 + i * 28),
+        y: Math.round(at.y + i * 28),
+        w: DEFAULT_WIDTH,
+      });
+      i += 1;
+    }
+    setBusy(null);
+    router.refresh();
+  };
+
   const pullIn = async (id: string) => {
     const spot = spotInView();
     setOverrides((current) => ({ ...current, [id]: spot }));
@@ -419,7 +546,24 @@ export function Board({
         onPointerMove={onSurfacePointerMove}
         onPointerUp={onSurfacePointerUp}
         onWheel={onWheel}
-        className="relative flex-1 cursor-grab touch-none overflow-hidden active:cursor-grabbing"
+        onDragOver={(e) => {
+          // Without preventDefault the browser navigates away to the file
+          // instead, which loses the board and looks like a crash.
+          e.preventDefault();
+          e.dataTransfer.dropEffect = "copy";
+          if (!dropping) setDropping(true);
+        }}
+        onDragLeave={(e) => {
+          // Only when the pointer has actually left the surface, not when it
+          // crosses from the background onto a card inside it.
+          if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+            setDropping(false);
+          }
+        }}
+        onDrop={onDrop}
+        className={`relative flex-1 cursor-grab touch-none overflow-hidden active:cursor-grabbing ${
+          dropping ? "ring-2 ring-inset ring-ink/30" : ""
+        }`}
         style={{
           // A grid that scales with the board, so zoom has something to read
           // against. Without it, panning an empty board feels like nothing is
@@ -572,17 +716,34 @@ export function Board({
                   />
                 )}
 
+                {/* dir="auto" on each piece, not on the card: a board here
+                    holds a Hebrew note beside an English citation, and a
+                    direction chosen once for the whole card puts one of them
+                    the wrong way round - trailing punctuation jumping to the
+                    far side of the line is how it shows. Each text takes its
+                    direction from its own first strong character. */}
                 <div className="flex flex-col gap-1 px-2.5 py-2">
-                  <p className="display text-[15px] leading-tight">
+                  <p dir="auto" className="display text-[15px] leading-tight">
                     {item.title || "Untitled"}
                   </p>
                   {item.body && (
-                    <p className="max-h-[220px] overflow-hidden text-[12px] leading-relaxed text-ink-secondary">
-                      {item.body}
-                    </p>
+                    <div className="max-h-[220px] overflow-hidden text-[12px] leading-relaxed text-ink-secondary">
+                      {/* Line by line, for two reasons that turned up in the
+                          same card. A note typed as "Entrainment" and then a
+                          Hebrew definition is one block whose first strong
+                          character is Latin, so dir="auto" on the whole thing
+                          lays the Hebrew out left to right. And a paragraph
+                          holds its newlines as spaces, so a note written in
+                          lines arrived as one run-on sentence. */}
+                      {item.body.split(/\r?\n/).map((line, n) => (
+                        <p key={n} dir="auto" className={line.trim() ? "" : "h-2"}>
+                          {line}
+                        </p>
+                      ))}
+                    </div>
                   )}
                   {item.attribution && (
-                    <p className="truncate text-[11px] text-ink-muted">
+                    <p dir="auto" className="truncate text-[11px] text-ink-muted">
                       {item.attribution}
                     </p>
                   )}
@@ -648,6 +809,15 @@ export function Board({
         <div className="pointer-events-none absolute bottom-3 right-3 rounded-md border border-rule bg-card px-2 py-1 text-[11px] text-ink-muted">
           {Math.round(view.scale * 100)}%
         </div>
+
+        {(dropping || busy) && (
+          <div className="pointer-events-none absolute inset-x-0 top-4 flex justify-center">
+            <p className="rounded-full border border-rule bg-card px-4 py-2 text-[13px] shadow-sm">
+              {busy ??
+                "Drop it anywhere — photographs, PDFs, recordings, or a link"}
+            </p>
+          </div>
+        )}
       </div>
 
       {picking && (
@@ -738,7 +908,7 @@ function Picker({
                   <span className="h-10 w-10 shrink-0 rounded bg-ink/[0.06]" />
                 )}
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[14px]">
+                  <span dir="auto" className="block truncate text-[14px]">
                     {item.title || "Untitled"}
                   </span>
                   <span className="block truncate text-[11px] text-ink-muted">
@@ -812,12 +982,14 @@ function Composer({
 
       <input
         autoFocus
+        dir="auto"
         value={title}
         onChange={(e) => setTitle(e.target.value)}
         placeholder="Title (required)"
         className="w-full rounded-lg border border-rule bg-card px-3 py-2.5 text-[16px]"
       />
       <textarea
+        dir="auto"
         rows={4}
         value={body}
         onChange={(e) => setBody(e.target.value)}
@@ -825,6 +997,7 @@ function Composer({
         className="w-full rounded-lg border border-rule bg-card px-3 py-2.5 text-[15px]"
       />
       <input
+        dir="auto"
         value={attribution}
         onChange={(e) => setAttribution(e.target.value)}
         placeholder="Author, publication, year, link…"

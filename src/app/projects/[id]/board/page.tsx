@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { createItemLink, deleteItemLink } from "../map-actions";
+import { createItem, createItemLink, deleteItemLink } from "../map-actions";
 import { setItemCanvas, createBoardItem } from "./board-actions";
 import { Board } from "./board";
 
@@ -118,6 +118,7 @@ export default async function BoardPage({
       layers={layersResult.data ?? []}
       setItemCanvasAction={setItemCanvas}
       createBoardItemAction={createBoardItem}
+      createItemAction={createItem}
       createItemLinkAction={createItemLink}
       deleteItemLinkAction={deleteItemLink}
     />

@@ -232,6 +232,34 @@ function parseGeometry(raw: string): ValidGeometry | null {
   return null;
 }
 
+/**
+ * A position on the project's board, if the form carried one.
+ *
+ * Bounded so a bad number cannot put a card somewhere nobody can scroll to,
+ * which is the same as deleting it but looks like a drawing bug. Null when
+ * absent, which is every item made on the map.
+ */
+function readCanvas(raw: unknown): { x: number; y: number; w: number } | null {
+  if (typeof raw !== "string" || !raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const { x, y, w } = parsed;
+    if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(w)) {
+      return null;
+    }
+    const nx = x as number;
+    const ny = y as number;
+    if (Math.abs(nx) > 100_000 || Math.abs(ny) > 100_000) return null;
+    return {
+      x: Math.round(nx),
+      y: Math.round(ny),
+      w: Math.round(Math.min(1600, Math.max(80, w as number))),
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function createItem(
   projectId: string,
   _prevState: ActionResult,
@@ -257,6 +285,10 @@ export async function createItem(
   // EXIF read. Anything else is discarded rather than stored, so the column
   // can only ever hold a claim this app knows how to draw.
   const locatedBy = asPlacement(formData.get("located_by"));
+  // Where this lands on the project's board, when it was made there rather
+  // than on the map - a file dragged onto it, or a card typed into it. A
+  // layout fact and never a location: see supabase/canvas_board.sql.
+  const canvas = readCanvas(formData.get("canvas"));
 
   if (!title) {
     return { error: "Title is required." };
@@ -315,6 +347,7 @@ export async function createItem(
     media,
     created_by: user?.id ?? null,
     located_by: locatedBy,
+    canvas,
   });
 
   if (error) {
