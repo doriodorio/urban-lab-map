@@ -467,6 +467,12 @@ export function MapEditor({
 }) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
+  /**
+   * The cluster at the foot of the map: the drawing tools, and the
+   * Finish/Cancel row while a shape is being drawn. The margin strip
+   * measures it so it can rest just above it, at whatever height it is.
+   */
+  const bottomToolsRef = useRef<HTMLDivElement | null>(null);
   const markersRef = useRef<Map<string, maplibregl.Marker>>(new Map());
   // Set while a drag is in flight so the render effect doesn't yank the
   // marker back to its stored position mid-gesture.
@@ -1060,7 +1066,8 @@ export function MapEditor({
   const marginBox = useMarginColumn(
     mapRef,
     marginEntries,
-    projectPerimeter(surveyedGeometries(items))
+    projectPerimeter(surveyedGeometries(items)),
+    bottomToolsRef
   );
 
   // Render line/polygon items.
@@ -1343,7 +1350,10 @@ export function MapEditor({
             the strip now reaches the full width of the map, and without this
             it would swallow every click along the bottom of the canvas -
             including the one that places a point there. */}
-        <div className="absolute bottom-3 left-3 right-3 z-10 flex flex-col items-start gap-2 pointer-events-none max-md:bottom-12 [&>*]:pointer-events-auto">
+        <div
+          ref={bottomToolsRef}
+          className="absolute bottom-3 left-3 right-3 z-10 flex flex-col items-start gap-2 pointer-events-none max-md:bottom-12 [&>*]:pointer-events-auto"
+        >
           {/* Finish/Cancel appear above the tools, anchored to them, so the
               choice shows up next to the thing that raised it. */}
           {(drawMode === "line" || drawMode === "polygon") &&

@@ -308,6 +308,7 @@ export function PublicViewer({
     mapRef,
     marginEntries,
     projectPerimeter(surveyedGeometries(items))
+    // No drawing tools here - only the map's own attribution line to clear.
   );
 
   // Only the stages this project actually has anything for.

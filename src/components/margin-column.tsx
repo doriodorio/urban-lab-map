@@ -17,9 +17,9 @@ import { useMapInstance } from "@/lib/map-ready";
  * standing in it.
  *
  * So they are kept with no coordinate, and drawn beside the map instead of on
- * it: a strip running the full width of the perimeter, just under its bottom
- * edge, in the order the group gathered them. That is the oldest convention
- * a map sheet has - the margin, where the legend and the sources have always
+ * it: a strip as wide as the perimeter, resting on the foot of the canvas,
+ * in the order the group gathered them. That is the oldest convention a map
+ * sheet has - the margin, where the legend and the sources have always
  * lived, and which nobody has ever read as part of the territory.
  *
  * Two rules hold it up.
@@ -44,15 +44,12 @@ export type MarginEntry = {
 /** How close to any edge of the canvas the strip may come. */
 const EDGE = 8;
 /**
- * Kept clear at the foot of the canvas for the drawing tools, which sit in
- * the bottom-left. The strip now runs the full width of the perimeter, so it
- * crosses above them rather than beside them.
+ * Kept clear at the foot of the canvas when there is nothing down there to
+ * measure - the map's own attribution line, and no more.
  */
-const TOOLBAR = 66;
-/** Paper showing around the marks, a row's height, and a mark's own width. */
-const PANEL_PAD = 8;
-const ROW_HEIGHT = 24;
-const MARK_WIDTH = 196;
+const BARE_CLEARANCE = 44;
+/** Paper between the strip and whatever sits under it. */
+const FOOTER_GAP = 10;
 /**
  * A strip narrower than this has nowhere to put a title, which happens when
  * the perimeter itself is a sliver - a project whose material is all in one
@@ -67,12 +64,16 @@ function clamp(value: number, low: number, high: number): number {
 /** Where the strip sits on screen, in canvas pixels. */
 export type MarginBox = {
   left: number;
-  top: number;
+  /**
+   * Distance from the foot of the canvas, not a top.
+   *
+   * The strip wraps its marks, so how tall it is depends on how many fit on
+   * a line - which the browser knows and this does not. Anchoring the bottom
+   * edge means the height never has to be guessed: an over-estimate used to
+   * leave it hovering above the tools with a band of map showing under it.
+   */
+  bottom: number;
   width: number;
-  /** True when the strip hangs below the frame's line, false when it sits
-   * above it. Only the corners away from the line are rounded, so the edge
-   * that touches the frame reads as joined to it. */
-  below: boolean;
 };
 
 /**
@@ -86,7 +87,18 @@ export type MarginBox = {
 export function useMarginColumn(
   mapRef: { current: maplibregl.Map | null },
   entries: MarginEntry[],
-  perimeter: PerimeterRing | null
+  perimeter: PerimeterRing | null,
+  /**
+   * Whatever already occupies the foot of the canvas - in the editor, the
+   * cluster holding the drawing tools.
+   *
+   * Measured rather than guessed. A constant was wrong twice in one morning:
+   * once when the tools became forty-pixel squares and the strip landed on
+   * top of them, and again on a phone, where that cluster sits higher to
+   * clear the attribution line and a number large enough for the phone left
+   * a band of dead map on the laptop. The element knows where it is.
+   */
+  footerRef?: { current: HTMLElement | null }
 ): MarginBox | null {
   const map = useMapInstance(mapRef);
   const [box, setBox] = useState<MarginBox | null>(null);
@@ -108,29 +120,29 @@ export function useMarginColumn(
       frame = requestAnimationFrame(() => {
         const canvas = map.getCanvas();
         const width = canvas.clientWidth;
-        const height = canvas.clientHeight;
+        const footer = footerRef?.current?.getBoundingClientRect();
+        const clearance = footer
+          ? Math.max(
+              BARE_CLEARANCE,
+              canvas.getBoundingClientRect().bottom - footer.top + FOOTER_GAP
+            )
+          : BARE_CLEARANCE;
 
         // perimeter[0] and [1] are the ring's south-west and south-east
         // corners: the rectangle is built [SW, SE, NE, NW, SW]. The strip
-        // runs between them, under the frame's bottom edge, which is where a
-        // map sheet has always put its sources.
+        // spans between them, so it is as wide as the sheet whose sources it
+        // lists.
         //
         // A project whose only material so far is unplaced has no perimeter
         // to measure - and that is exactly the project where losing the strip
         // would be worst, because nothing else is on the map either. It falls
-        // back to the foot of the view.
+        // back to the width of the view.
         const sw = perimeter ? map.project(perimeter[0]) : null;
         const se = perimeter ? map.project(perimeter[1]) : null;
 
-        // The corners are geographic points, so nothing keeps them on screen,
-        // and the usual case is the worst one. Opening a project fits the
-        // view to its items, which leaves the perimeter filling the canvas
-        // with no white space outside it to put a margin in, so the strip
-        // lands past the bottom edge and cannot even be clicked.
-        //
-        // So the perimeter is where the strip wants to be, not where it has
-        // to be: it is held inside the canvas, and when the frame leaves the
-        // view the strip stays at the edge rather than following it out.
+        // The corners are geographic points, so nothing keeps them on
+        // screen: pan far enough and the frame leaves the view entirely.
+        // The strip is held inside the canvas instead of following it out.
         // Overlapping the map a little is a smaller lie than vanishing - the
         // material is still in the project either way, and a reader who
         // cannot see it has been told something false about what was
@@ -140,29 +152,27 @@ export function useMarginColumn(
           MIN_WIDTH,
           width - EDGE * 2
         );
-        const perRow = Math.max(1, Math.floor(strip / MARK_WIDTH));
-        const tall = Math.ceil(count / perRow) * ROW_HEIGHT + PANEL_PAD * 2;
-        const floor = height - TOOLBAR - tall;
-
-        // The strip's edge sits on the frame's bottom line, with nothing
-        // between them. A gap would make it a panel floating near the frame;
-        // flush, it is the frame's own footer, the way a title block belongs
-        // to a drawing sheet's border rather than lying beside it.
+        // Always at the foot of the canvas, never hanging off the frame's
+        // bottom line.
         //
-        // Below that line when there is room, and above it when there is
-        // not. Opening a project fits the view to its items, so the usual
-        // case is a perimeter that reaches the foot of the canvas with no
-        // paper left under it - and a strip that answered by drifting upward
-        // would be touching nothing at all. Inside the frame it still reads
-        // as the frame's footer, because it is still on the line.
-        const bottom = se ? se.y : height - TOOLBAR;
-        const top = bottom <= floor ? bottom : bottom - tall;
-
+        // It used to follow that line, on the argument that a margin belongs
+        // to the sheet it edges. That holds while the frame fills the view,
+        // which it does on a laptop after the view is fitted to the items -
+        // and there the two are the same place. It fails on a phone, where a
+        // wide perimeter fitted to a narrow screen leaves the frame's bottom
+        // line halfway up a tall canvas: the strip came to rest in the
+        // middle of the map, touching nothing, reading as a panel dropped
+        // over the territory rather than as a list beside it. That is the
+        // one reading this strip exists to prevent.
+        //
+        // So the sheet is the screen. The strip keeps the frame's width and
+        // sits on the bottom edge, above the drawing tools - which is where
+        // it already was in the common case, and somewhere defensible in
+        // every other.
         setBox({
           left: clamp(sw ? sw.x : EDGE, EDGE, width - strip - EDGE),
-          top: clamp(top, EDGE, floor),
+          bottom: clearance,
           width: strip,
-          below: bottom <= floor,
         });
       });
     };
@@ -229,10 +239,8 @@ export function MarginColumn({
   return (
     <div className="pointer-events-none absolute inset-0 z-10">
       <div
-        style={{ left: box.left, top: box.top, width: box.width }}
-        className={`pointer-events-auto absolute flex flex-row-reverse flex-wrap items-center gap-x-5 gap-y-1 border border-rule bg-paper/95 px-2 py-2 shadow-sm backdrop-blur-[2px] ${
-          box.below ? "rounded-b-md" : "rounded-t-md"
-        }`}
+        style={{ left: box.left, bottom: box.bottom, width: box.width }}
+        className="pointer-events-auto absolute flex flex-row-reverse flex-wrap items-center gap-x-5 gap-y-1 rounded-t-md border border-rule bg-paper/95 px-2 py-2 shadow-sm backdrop-blur-[2px]"
       >
         {entries.map((entry) => (
           <button
