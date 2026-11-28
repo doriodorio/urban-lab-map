@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { placeConnected } from "./place-connected";
 
 type ActionResult = { error?: string; success?: boolean };
 
@@ -60,13 +61,36 @@ export async function setItemCanvas(
   projectId: string,
   itemId: string,
   spot: CanvasSpot | null
-): Promise<ActionResult> {
+): Promise<
+  ActionResult & {
+    alsoPlaced?: { id: string; spot: CanvasSpot }[];
+    truncated?: boolean;
+  }
+> {
   const canvas = spot === null ? null : readSpot(spot);
   if (spot !== null && canvas === null) {
     return { error: "Invalid position on the board." };
   }
 
   const supabase = await createClient();
+
+  /**
+   * Was it on the board before this?
+   *
+   * Only an arrival brings the things it is connected to with it. A drag and
+   * a resize are the same call, and a card already on the board should not
+   * re-run the cascade every time somebody nudges it - the chain is already
+   * here, and re-placing it would move cards the group had arranged by hand.
+   */
+  const { data: before } = await supabase
+    .from("items")
+    .select("canvas")
+    .eq("id", itemId)
+    .eq("project_id", projectId)
+    .is("deleted_at", null)
+    .maybeSingle();
+  const arriving = canvas !== null && (before?.canvas ?? null) === null;
+
   const { error, count } = await supabase
     .from("items")
     .update({ canvas }, { count: "exact" })
@@ -81,9 +105,17 @@ export async function setItemCanvas(
     return { error: "That item is not in this project, or is in the trash." };
   }
 
+  const cascade = arriving
+    ? await placeConnected(supabase, projectId, [itemId])
+    : { cards: [], truncated: false };
+
   revalidatePath(`/projects/${projectId}/board`);
   revalidatePath(`/projects/${projectId}`);
-  return { success: true };
+  return {
+    success: true,
+    alsoPlaced: cascade.cards,
+    truncated: cascade.truncated,
+  };
 }
 
 /**

@@ -97,18 +97,13 @@ export default async function BoardPage({
   const onBoard = items.filter((i) => i.canvas !== null);
 
   /**
-   * Every link with at least one end on the board - not only the ones with
-   * both.
+   * The links between cards on the board.
    *
-   * A link whose far end is missing used to be dropped here, which put the
-   * board back in the state that made links useless in the first place: a
-   * relationship nobody can see is a relationship nobody makes. If a card is
-   * connected to something, that something belongs on the board too, whether
-   * or not anyone thought to fetch it.
-   *
-   * It arrives as a card that has not been placed - see `ghosts` in board.tsx
-   * - so the board shows the connection without anybody's layout being
-   * written for them.
+   * Both ends, because both ends are here: anything connected to a card is
+   * brought onto the board when that card arrives - see place-connected.ts.
+   * A link with a missing end survives only until someone takes a card off
+   * again, and it would draw as nothing, so it is left out rather than sent
+   * and skipped.
    *
    * Two queries rather than one `or`: the filter is a list of ids on each
    * side, and an `or` of two `in`s has to be built as a string, which is the
@@ -116,6 +111,7 @@ export default async function BoardPage({
    * character.
    */
   const onBoardIds = [...new Set(onBoard.map((i) => i.id))];
+  const here = new Set(onBoardIds);
   const [fromRows, toRows] = onBoardIds.length
     ? await Promise.all([
         supabase
@@ -133,7 +129,7 @@ export default async function BoardPage({
     ...new Map(
       [...(fromRows.data ?? []), ...(toRows.data ?? [])].map((l) => [l.id, l])
     ).values(),
-  ];
+  ].filter((l) => here.has(l.item_a) && here.has(l.item_b));
 
   return (
     <Board

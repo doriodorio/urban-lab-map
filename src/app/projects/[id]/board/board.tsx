@@ -6,6 +6,12 @@ import { useRouter } from "next/navigation";
 import { TYPE_OPTIONS } from "@/lib/item-types";
 import { preparePhoto } from "../photo-import";
 import { linkHost } from "@/lib/embed";
+import {
+  cardHeight,
+  findFreeSpot,
+  DEFAULT_CARD_WIDTH as DEFAULT_WIDTH,
+  type Box,
+} from "@/lib/board-layout";
 import type { CanvasSpot } from "./board-actions";
 
 type Media = { url: string; type: string };
@@ -30,19 +36,8 @@ type ItemLink = {
 type Layer = { id: string; name: string; color: string | null };
 type Result = { error?: string; success?: boolean };
 
-/** How tall a card is drawn, given its width and what is in it. */
-const CARD_HEADER = 44;
-const DEFAULT_WIDTH = 260;
 const MIN_SCALE = 0.15;
 const MAX_SCALE = 2.5;
-
-function cardHeight(item: Item, width: number) {
-  const cover = item.media?.find((m) => m.type === "image");
-  const picture = cover ? Math.round(width * 0.62) : 0;
-  const text = item.body ? Math.min(220, 40 + item.body.length * 0.36) : 0;
-  const credit = item.attribution ? 20 : 0;
-  return CARD_HEADER + picture + text + credit + 12;
-}
 
 function typeLabel(type: string) {
   return TYPE_OPTIONS.find((t) => t.value === type)?.label ?? type;
@@ -93,7 +88,12 @@ export function Board({
     projectId: string,
     itemId: string,
     spot: CanvasSpot | null
-  ) => Promise<Result>;
+  ) => Promise<
+    Result & {
+      alsoPlaced?: { id: string; spot: CanvasSpot }[];
+      truncated?: boolean;
+    }
+  >;
   createBoardItemAction: (
     projectId: string,
     input: {
@@ -159,6 +159,7 @@ export function Board({
   const [picking, setPicking] = useState(false);
   const [composing, setComposing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const byId = useMemo(() => new Map(items.map((i) => [i.id, i])), [items]);
   const onBoard = useMemo(
@@ -174,67 +175,19 @@ export function Board({
     [layers]
   );
 
-  /**
-   * Cards for things that are connected to the board but have not been put
-   * on it.
-   *
-   * A link with one end missing is a relationship nobody can see, which is
-   * the condition that made links go unused in the first place - eight of
-   * them across thirteen projects. So anything joined to a card on the board
-   * appears beside it, whether or not somebody thought to fetch it.
-   *
-   * It appears without being written. Placing a card is a decision about
-   * layout, and filling in that decision on somebody's behalf is the same
-   * backfill this column was careful not to do. A ghost becomes a real card
-   * the moment it is dragged or kept, and not before.
-   *
-   * Its position is derived from the anchor's, around a ring, with the angle
-   * taken from the id - so it sits in the same place on every render instead
-   * of moving each time the board is opened.
-   */
-  const ghosts = useMemo(() => {
-    const placed = new Set(Object.keys(spots));
-    const found = new Map<string, { item: Item; spot: CanvasSpot }>();
-
-    for (const link of links) {
-      const anchorId = placed.has(link.item_a)
-        ? link.item_a
-        : placed.has(link.item_b)
-          ? link.item_b
-          : null;
-      if (!anchorId) continue;
-
-      const farId = anchorId === link.item_a ? link.item_b : link.item_a;
-      if (placed.has(farId) || found.has(farId)) continue;
-
-      const item = byId.get(farId);
-      const anchorSpot = spots[anchorId];
-      if (!item || !anchorSpot) continue;
-
-      // A stable angle per item, so the ring does not reshuffle itself.
-      let hash = 0;
-      for (let i = 0; i < farId.length; i += 1) {
-        hash = (hash * 31 + farId.charCodeAt(i)) % 360;
-      }
-      const angle = (hash / 360) * Math.PI * 2;
-      const radius = 340;
-      found.set(farId, {
-        item,
-        spot: {
-          x: Math.round(anchorSpot.x + Math.cos(angle) * radius),
-          y: Math.round(anchorSpot.y + Math.sin(angle) * radius),
-          w: 200,
-        },
-      });
-    }
-
-    return found;
-  }, [links, spots, byId]);
-
-  /** Where a card is, whether it is really on the board or only showing. */
-  const anySpot = useCallback(
-    (id: string): CanvasSpot | null => spots[id] ?? ghosts.get(id)?.spot ?? null,
-    [spots, ghosts]
+  /** What the board is already using, for finding a card somewhere clear. */
+  const occupied = useMemo(
+    (): Box[] =>
+      onBoard.map((item) => {
+        const spot = spots[item.id];
+        return {
+          x: spot.x,
+          y: spot.y,
+          w: spot.w,
+          h: cardHeight(item, spot.w),
+        };
+      }),
+    [onBoard, spots]
   );
 
   /** Screen pixels to board units. */
@@ -253,11 +206,11 @@ export function Board({
   const boxOf = useCallback(
     (id: string) => {
       const item = byId.get(id);
-      const spot = anySpot(id);
+      const spot = spots[id];
       if (!item || !spot) return null;
       return { x: spot.x, y: spot.y, w: spot.w, h: cardHeight(item, spot.w) };
     },
-    [byId, anySpot]
+    [byId, spots]
   );
 
   const save = useCallback(
@@ -274,6 +227,7 @@ export function Board({
         });
         router.refresh();
       }
+      return result;
     },
     [projectId, router, setItemCanvasAction]
   );
@@ -411,17 +365,25 @@ export function Board({
   };
 
   /** A spot in the middle of what is currently on screen. */
-  const spotInView = useCallback((): CanvasSpot => {
-    const rect = surface.current?.getBoundingClientRect();
-    const centre = rect
-      ? toBoard(rect.left + rect.width / 2, rect.top + rect.height / 3)
-      : { x: 0, y: 0 };
-    return {
-      x: Math.round(centre.x - DEFAULT_WIDTH / 2),
-      y: Math.round(centre.y),
-      w: DEFAULT_WIDTH,
-    };
-  }, [toBoard]);
+  const spotInView = useCallback(
+    (height = 180): CanvasSpot => {
+      const rect = surface.current?.getBoundingClientRect();
+      const centre = rect
+        ? toBoard(rect.left + rect.width / 2, rect.top + rect.height / 3)
+        : { x: 0, y: 0 };
+      // Near the middle of what is on screen, but never on top of a card
+      // that is already there: a card landing exactly under another one
+      // looks like nothing happened.
+      const free = findFreeSpot(occupied, {
+        x: Math.round(centre.x - DEFAULT_WIDTH / 2),
+        y: Math.round(centre.y),
+        w: DEFAULT_WIDTH,
+        h: height,
+      });
+      return { x: free.x, y: free.y, w: DEFAULT_WIDTH };
+    },
+    [toBoard, occupied]
+  );
 
   // --- dropping things onto it --------------------------------------------
   const [dropping, setDropping] = useState(false);
@@ -543,23 +505,80 @@ export function Board({
   };
 
   /**
-   * Turn a showing card into a placed one, where it already appears.
+   * Move the view so a set of cards is on screen together.
    *
-   * At its own position rather than in the middle of the screen: it has been
-   * sitting there next to the thing it is connected to, and moving it on the
-   * way to being kept would undo the only reason it was legible.
+   * Used when a card arrives with others attached: they are placed around
+   * it, which can be outside what is currently in view, and "2 connected
+   * cards came with it" is no use at all if the two are somewhere off the
+   * left edge.
    */
-  const keepGhost = async (id: string, spot: CanvasSpot) => {
-    setOverrides((current) => ({ ...current, [id]: spot }));
-    await save(id, spot);
-    router.refresh();
-  };
+  const frameOn = useCallback(
+    (boxes: Box[]) => {
+      const rect = surface.current?.getBoundingClientRect();
+      if (!rect || !boxes.length) return;
+
+      const left = Math.min(...boxes.map((b) => b.x));
+      const top = Math.min(...boxes.map((b) => b.y));
+      const right = Math.max(...boxes.map((b) => b.x + b.w));
+      const bottom = Math.max(...boxes.map((b) => b.y + b.h));
+      const pad = 60;
+
+      const scale = Math.max(
+        MIN_SCALE,
+        Math.min(
+          1,
+          rect.width / (right - left + pad * 2),
+          rect.height / (bottom - top + pad * 2)
+        )
+      );
+      setView({
+        scale,
+        x: Math.round(rect.width / 2 - ((left + right) / 2) * scale),
+        y: Math.round(rect.height / 2 - ((top + bottom) / 2) * scale),
+      });
+    },
+    []
+  );
 
   const pullIn = async (id: string) => {
-    const spot = spotInView();
+    const item = byId.get(id);
+    const spot = spotInView(item ? cardHeight(item, DEFAULT_WIDTH) : 180);
     setOverrides((current) => ({ ...current, [id]: spot }));
     setPicking(false);
-    await save(id, spot);
+    const result = await save(id, spot);
+
+    /**
+     * What came with it.
+     *
+     * Shown immediately rather than waiting for the reload, and announced:
+     * several cards appearing from one tap is the behaviour that was asked
+     * for, but unannounced it reads as a bug.
+     */
+    const also = result?.alsoPlaced ?? [];
+    if (also.length) {
+      setOverrides((current) => ({
+        ...current,
+        ...Object.fromEntries(also.map((c) => [c.id, c.spot])),
+      }));
+      setNotice(
+        result?.truncated
+          ? `${also.length} connected cards came with it — the near end of a longer chain.`
+          : also.length === 1
+            ? "A connected card came with it."
+            : `${also.length} connected cards came with it.`
+      );
+      frameOn(
+        [{ id, spot }, ...also].map((c) => {
+          const card = byId.get(c.id);
+          return {
+            x: c.spot.x,
+            y: c.spot.y,
+            w: c.spot.w,
+            h: card ? cardHeight(card, c.spot.w) : 180,
+          };
+        })
+      );
+    }
     router.refresh();
   };
 
@@ -606,13 +625,16 @@ export function Board({
         </div>
       </header>
 
-      {error && (
+      {(error ?? notice) && (
         <button
           type="button"
-          onClick={() => setError(null)}
+          onClick={() => {
+            setError(null);
+            setNotice(null);
+          }}
           className="z-20 border-b border-rule bg-card px-4 py-2 text-left text-[13px] text-ink-secondary"
         >
-          {error} — tap to dismiss
+          {error ?? notice} — tap to dismiss
         </button>
       )}
 
@@ -734,40 +756,6 @@ export function Board({
               />
             )}
           </svg>
-
-          {/* Connected, but nobody has put it here. Dashed and quiet, so it
-              reads as "this exists and is joined to that" rather than as part
-              of the arrangement. One tap keeps it. */}
-          {[...ghosts.values()].map(({ item, spot }) => (
-            <div
-              key={`ghost-${item.id}`}
-              onPointerDown={(e) => {
-                if (connectingFrom) {
-                  e.stopPropagation();
-                  void finishConnection(item.id);
-                  return;
-                }
-                e.stopPropagation();
-              }}
-              className="absolute flex flex-col overflow-hidden rounded-xl border border-dashed border-ink/30 bg-card/70 p-2.5"
-              style={{ left: spot.x, top: spot.y, width: spot.w }}
-            >
-              <p className="text-[10px] uppercase tracking-wide text-ink-muted">
-                {typeLabel(item.type)} · connected
-              </p>
-              <p dir="auto" className="display truncate text-[14px] leading-tight">
-                {item.title || "Untitled"}
-              </p>
-              <button
-                type="button"
-                onPointerDown={(e) => e.stopPropagation()}
-                onClick={() => void keepGhost(item.id, spot)}
-                className="press mt-1.5 self-start rounded-md border border-rule px-2 py-1 text-[11px]"
-              >
-                Keep it here
-              </button>
-            </div>
-          ))}
 
           {onBoard.map((item) => {
             const spot = spots[item.id];

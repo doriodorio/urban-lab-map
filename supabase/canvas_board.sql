@@ -36,9 +36,18 @@
 --     item keeps "geometry": null however it is arranged on the board.
 --   * The derived project perimeter must never see it. The perimeter is the
 --     extent of the fieldwork, not of the reading.
---   * Nothing is backfilled. An item that has never been put on the board
---     has no position on it, and inventing a grid for 449 photographs would
---     fill the board with material nobody chose to arrange.
+--   * Nothing is backfilled wholesale. An item that has never been put on
+--     the board has no position on it, and inventing a grid for 449
+--     photographs would fill the board with material nobody chose to
+--     arrange.
+--
+--     One position is written on a group's behalf, and only one: when a card
+--     is put on the board, everything linked to it is placed with it (see
+--     src/app/projects/[id]/board/place-connected.ts). That is not the
+--     backfill this warns about - it is bounded by links the group made
+--     themselves and triggered by them placing a card - but it is the only
+--     exception, it never runs on a mere page load, and it touches nothing
+--     but this column.
 --
 -- An item may have both: a photograph can be on the map and also pulled onto
 -- the board to sit beside the article that explains it. The two are

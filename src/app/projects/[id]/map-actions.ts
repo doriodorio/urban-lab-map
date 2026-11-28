@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { asPlacement } from "@/lib/placement";
 import { createClient } from "@/lib/supabase/server";
+import { placeConnected } from "./board/place-connected";
 import { MAP_STYLES } from "@/lib/base-maps";
 import { CATEGORIES } from "@/lib/categories";
 
@@ -875,6 +876,27 @@ export async function createItemLink(
       return { error: "These items are already linked." };
     }
     return { error: error.message };
+  }
+
+  /**
+   * If either end is on the board, the other one belongs there too.
+   *
+   * The rule holds wherever a link is made, not only on the board itself -
+   * linking an article to a photograph from the map's own panel is the most
+   * likely way it happens, and a rule that only applies in one screen is a
+   * rule nobody can rely on.
+   */
+  const { data: ends2 } = await supabase
+    .from("items")
+    .select("id, canvas")
+    .eq("project_id", projectId)
+    .in("id", [item_a, item_b]);
+  const seeds = (ends2 ?? [])
+    .filter((e) => e.canvas !== null)
+    .map((e) => e.id);
+  if (seeds.length) {
+    await placeConnected(supabase, projectId, seeds);
+    revalidatePath(`/projects/${projectId}/board`);
   }
 
   revalidatePath(`/projects/${projectId}`);
