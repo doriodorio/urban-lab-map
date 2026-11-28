@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { TYPE_OPTIONS } from "@/lib/item-types";
 import { preparePhoto } from "../photo-import";
 import { linkHost } from "@/lib/embed";
+import { IconConnect, IconOnMap, IconOffBoard } from "@/components/icons";
 import {
   cardHeight,
   findFreeSpot,
@@ -174,6 +175,25 @@ export function Board({
     () => new Map(layers.map((l) => [l.id, l])),
     [layers]
   );
+
+  /**
+   * Escape gets out of drawing a connection.
+   *
+   * It mattered less when the button said "Connect" and the way out was
+   * obvious; now that it is a mark, the state is easier to enter by accident
+   * and needs the exit every other tool uses. Clicking empty board still
+   * cancels too.
+   */
+  useEffect(() => {
+    if (!connectingFrom) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      setConnectingFrom(null);
+      setPointer(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [connectingFrom]);
 
   /** What the board is already using, for finding a card somewhere clear. */
   const occupied = useMemo(
@@ -848,7 +868,11 @@ export function Board({
                 </div>
 
                 {isSelected && (
-                  <div className="flex items-center gap-1 border-t border-rule px-2 py-1.5">
+                  /* Marks rather than words. Three labelled buttons under
+                     every selected card drew more attention than the card,
+                     and on a board the material is supposed to be the loud
+                     thing. The words survive in `title` and `aria-label`. */
+                  <div className="flex items-center gap-0.5 border-t border-rule px-1.5 py-1">
                     <button
                       type="button"
                       onPointerDown={(e) => e.stopPropagation()}
@@ -856,25 +880,30 @@ export function Board({
                         setConnectingFrom(item.id);
                         setSelected(null);
                       }}
-                      className="press rounded-md border border-rule px-2 py-1 text-[11px]"
+                      className="press grid size-7 place-items-center rounded-md text-ink-secondary hover:bg-paper hover:text-ink"
+                      title="Connect this to another card"
+                      aria-label="Connect this to another card"
                     >
-                      Connect
+                      <IconConnect />
                     </button>
                     <Link
                       href={`/projects/${projectId}?item=${item.id}`}
                       onPointerDown={(e) => e.stopPropagation()}
-                      className="press rounded-md border border-rule px-2 py-1 text-[11px]"
+                      className="press grid size-7 place-items-center rounded-md text-ink-secondary hover:bg-paper hover:text-ink"
+                      title="Open this on the map"
+                      aria-label="Open this on the map"
                     >
-                      Open on the map
+                      <IconOnMap />
                     </Link>
                     <button
                       type="button"
                       onPointerDown={(e) => e.stopPropagation()}
                       onClick={() => void takeOff(item.id)}
-                      className="press ml-auto rounded-md px-2 py-1 text-[11px] text-ink-secondary"
-                      title="Takes it off the board. The item itself stays in the project."
+                      className="press ml-auto grid size-7 place-items-center rounded-md text-ink-muted hover:bg-paper hover:text-ink"
+                      title="Take it off the board. The item itself stays in the project."
+                      aria-label="Take it off the board. The item itself stays in the project."
                     >
-                      Off the board
+                      <IconOffBoard />
                     </button>
                   </div>
                 )}
