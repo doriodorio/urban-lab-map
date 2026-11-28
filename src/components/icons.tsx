@@ -160,3 +160,40 @@ export function IconOffBoard(props: IconProps) {
     </Svg>
   );
 }
+
+/**
+ * The way back out to the workspace.
+ *
+ * A house, because the destination is not a page in this project but the
+ * place all the projects are kept - the one link in the bar that leaves.
+ * Roof overhanging the walls, no door and no chimney: at 18px a door is
+ * three dark pixels and a chimney is a lump on the roof, and neither says
+ * anything the silhouette has not already said.
+ */
+export function IconHome(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M3.8 10.9 12 4.2l8.2 6.7" />
+      <path d="M6.1 9.4v9.4a1.2 1.2 0 0 0 1.2 1.2h9.4a1.2 1.2 0 0 0 1.2-1.2V9.4" />
+    </Svg>
+  );
+}
+
+/**
+ * The project's settings.
+ *
+ * A cog - the one glyph in this set that is borrowed rather than drawn from
+ * what it does, and borrowed deliberately: every piece of software made in
+ * the last thirty years has put settings behind this mark, so it is read
+ * without being learned. Six teeth rather than eight, and deep ones: at 18px
+ * eight shallow teeth of this weight close back up into a ring, and the cog
+ * reads as a target.
+ */
+export function IconSettings(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M9.8 2.6 L14.2 2.6 L14.1 6.5 L15.7 7.4 L19.0 5.5 L21.2 9.2 L17.8 11.1 L17.8 12.9 L21.2 14.8 L19.0 18.5 L15.7 16.6 L14.1 17.5 L14.2 21.4 L9.8 21.4 L9.9 17.5 L8.3 16.6 L5.0 18.5 L2.8 14.8 L6.2 12.9 L6.2 11.1 L2.8 9.2 L5.0 5.5 L8.3 7.4 L9.9 6.5 Z" />
+      <circle cx="12" cy="12" r="2.9" />
+    </Svg>
+  );
+}

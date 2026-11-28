@@ -207,7 +207,10 @@ export function PublicViewer({
   // Lifted out of ExplorePanel so the map narrows along with the result list -
   // matching the editor, where searching is what makes a dense map readable.
   const [query, setQuery] = useState("");
-  const [galleryOn, setGalleryOn] = useState(false);
+  // On by default, as in the editor: a visitor who follows the link should
+  // land on the material, not on a field of identical pins to be clicked one
+  // at a time.
+  const [galleryOn, setGalleryOn] = useState(true);
   // On by default: it tells a visitor what area this project covers before
   // they have read a single item.
   const [showPerimeter, setShowPerimeter] = useState(true);
