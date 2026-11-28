@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ProjectBar } from "@/components/project-bar";
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { ThreadsManager } from "./threads-manager";
@@ -81,36 +82,38 @@ export default async function ThreadsPage({
     : { data: [] };
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-3xl flex-col gap-6 px-6 py-10">
-      <div className="flex items-center gap-3">
-        <Link
-          href={`/projects/${project.id}`}
-          className="text-sm text-ink-secondary underline"
-        >
-          ← Map
-        </Link>
-        <h1 className="display text-xl">{project.name} — Threads</h1>
-      </div>
-
-      <p className="text-sm text-ink-secondary">
-        A thread orders a subset of your items into a guided sequence, with a
-        line of narration for each step. Readers of the published map get the
-        thread as a tour they can play through.
-      </p>
-
-      <ThreadsManager
-        projectId={project.id}
-        threads={threads}
-        items={items}
-        steps={steps ?? []}
-        createThreadAction={createThread.bind(null, project.id)}
-        updateThreadAction={updateThread.bind(null, project.id)}
-        deleteThreadAction={deleteThread.bind(null, project.id)}
-        addItemAction={addItemToThread.bind(null, project.id)}
-        removeItemAction={removeItemFromThread.bind(null, project.id)}
-        moveItemAction={moveThreadItem.bind(null, project.id)}
-        updateNarrationAction={updateNarration.bind(null, project.id)}
+    <>
+      {/* Sticky, because this page scrolls and the bar is the way out of it.
+          The project's name is in the bar now, so the heading says only
+          where you are. */}
+      <ProjectBar
+        project={project}
+        view="threads"
+        className="sticky top-0 z-20 border-b border-rule"
       />
-    </main>
+      <main className="mx-auto flex min-h-screen max-w-3xl flex-col gap-6 px-6 py-10">
+        <h1 className="display text-xl">Threads</h1>
+
+        <p className="text-sm text-ink-secondary">
+          A thread orders a subset of your items into a guided sequence, with a
+          line of narration for each step. Readers of the published map get the
+          thread as a tour they can play through.
+        </p>
+
+        <ThreadsManager
+          projectId={project.id}
+          threads={threads}
+          items={items}
+          steps={steps ?? []}
+          createThreadAction={createThread.bind(null, project.id)}
+          updateThreadAction={updateThread.bind(null, project.id)}
+          deleteThreadAction={deleteThread.bind(null, project.id)}
+          addItemAction={addItemToThread.bind(null, project.id)}
+          removeItemAction={removeItemFromThread.bind(null, project.id)}
+          moveItemAction={moveThreadItem.bind(null, project.id)}
+          updateNarrationAction={updateNarration.bind(null, project.id)}
+        />
+      </main>
+    </>
   );
 }

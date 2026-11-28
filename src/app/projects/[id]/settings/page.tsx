@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { ProjectBar } from "@/components/project-bar";
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -98,24 +98,18 @@ export default async function ProjectSettingsPage({
   }, 0);
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-8 px-6 py-12">
-      <div className="flex items-center gap-4">
-        <Link
-          href={`/projects/${project.id}`}
-          className="text-sm text-ink-secondary underline"
-        >
-          ← Map
-        </Link>
-        <Link
-          href={`/projects/${project.id}/threads`}
-          className="text-sm text-ink-secondary underline"
-        >
-          Threads
-        </Link>
-      </div>
-
+    <>
+      {/* The cog in the bar is the mark for this page, so here it is the one
+          that is lit and none of the four views is. Sticky, because the page
+          is long and the bar is the way out of it. */}
+      <ProjectBar
+        project={project}
+        view="settings"
+        className="sticky top-0 z-20 border-b border-rule"
+      />
+      <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-8 px-6 py-12">
       <section className="flex flex-col gap-3">
-        <h1 className="display text-xl">{project.name}</h1>
+        <h1 className="display text-xl">Settings</h1>
         <EditProjectForm
           action={updateProject.bind(null, project.id)}
           name={project.name}
@@ -245,6 +239,7 @@ export default async function ProjectSettingsPage({
       <section className="border-t border-rule pt-6">
         <DeleteProjectButton action={deleteProject.bind(null, project.id)} />
       </section>
-    </main>
+      </main>
+    </>
   );
 }

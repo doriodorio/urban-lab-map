@@ -1,13 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import Link from "next/link";
 import * as maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { initialStyle, DEFAULT_CENTER, DEFAULT_STYLE_ID } from "@/lib/base-maps";
 import { ensureRtlTextSupport } from "@/lib/rtl-text";
 import { useHere, MEASURED_WITHIN_METRES, type Fix } from "@/lib/here";
 import { TYPE_OPTIONS } from "@/lib/item-types";
+import { ProjectBar } from "@/components/project-bar";
 import { preparePhoto } from "../photo-import";
 
 type Layer = { id: string; name: string; color: string | null };
@@ -485,22 +485,14 @@ export function FieldCapture({
 
   return (
     <div className="relative flex h-dvh w-full flex-col bg-paper">
-      <header className="flex shrink-0 items-center justify-between gap-3 border-b border-rule bg-card px-4 py-2.5">
-        <div className="min-w-0">
-          <p className="text-[11px] uppercase tracking-wide text-ink-muted">
-            In the field
-          </p>
-          <p className="display truncate text-[15px] leading-tight">
-            {projectName}
-          </p>
-        </div>
-        <Link
-          href={`/projects/${projectId}`}
-          className="press shrink-0 rounded-lg border border-rule px-3 py-1.5 text-[13px] text-ink-secondary"
-        >
-          Full map
-        </Link>
-      </header>
+      {/* The same bar as everywhere else in the project. The "Full map" link
+          that used to sit here is the Map tab now, and the "In the field"
+          label over the name is the underline under Field. */}
+      <ProjectBar
+        project={{ id: projectId, name: projectName }}
+        view="field"
+        className="shrink-0 border-b border-rule"
+      />
 
       <div ref={mapContainer} className="min-h-[30dvh] flex-1" />
 

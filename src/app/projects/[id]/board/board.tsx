@@ -7,6 +7,7 @@ import { TYPE_OPTIONS } from "@/lib/item-types";
 import { preparePhoto } from "../photo-import";
 import { linkHost } from "@/lib/embed";
 import { IconConnect, IconOnMap, IconOffBoard } from "@/components/icons";
+import { ProjectBar } from "@/components/project-bar";
 import {
   cardHeight,
   findFreeSpot,
@@ -611,39 +612,30 @@ export function Board({
 
   return (
     <div className="relative flex h-dvh w-full flex-col overflow-hidden bg-paper">
-      <header className="z-20 flex shrink-0 items-center gap-3 border-b border-rule bg-card px-4 py-2.5">
-        <Link
-          href={`/projects/${projectId}`}
-          className="press rounded-lg border border-rule px-3 py-1.5 text-[13px] text-ink-secondary"
+      {/* The same bar as the map, so that the row of views is true on the
+          page it points away from as well. What used to stand here - a "←
+          Map" button and a "Board" label over the name - is what the Map tab
+          and the underline under Board now say. */}
+      <ProjectBar
+        project={{ id: projectId, name: projectName }}
+        view="board"
+        className="z-20 shrink-0 border-b border-rule"
+      >
+        <button
+          type="button"
+          onClick={() => setComposing(true)}
+          className="press rounded-lg bg-ink px-3 py-1.5 text-[13px] font-medium text-paper"
         >
-          ← Map
-        </Link>
-        <div className="min-w-0">
-          <p className="text-[11px] uppercase tracking-wide text-ink-muted">
-            Board
-          </p>
-          <p className="display truncate text-[15px] leading-tight">
-            {projectName}
-          </p>
-        </div>
-
-        <div className="ml-auto flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setComposing(true)}
-            className="press rounded-lg bg-ink px-3 py-2 text-[13px] font-medium text-paper"
-          >
-            New card
-          </button>
-          <button
-            type="button"
-            onClick={() => setPicking(true)}
-            className="press rounded-lg border border-rule px-3 py-2 text-[13px]"
-          >
-            From the map ({offBoard.length})
-          </button>
-        </div>
-      </header>
+          New card
+        </button>
+        <button
+          type="button"
+          onClick={() => setPicking(true)}
+          className="press rounded-lg border border-rule px-3 py-1.5 text-[13px]"
+        >
+          From the map ({offBoard.length})
+        </button>
+      </ProjectBar>
 
       {(error ?? notice) && (
         <button

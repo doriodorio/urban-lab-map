@@ -13,9 +13,8 @@ import {
   IconNoPlace,
   IconLine,
   IconRegion,
-  IconHome,
-  IconSettings,
 } from "@/components/icons";
+import { ProjectBar } from "@/components/project-bar";
 import {
   CATEGORIES,
   defaultCategory,
@@ -289,19 +288,6 @@ function centroid(geometry: Geometry): [number, number] {
 }
 
 type DrawMode = "point" | "line" | "polygon" | null;
-
-/**
- * One of the four views, in the lower row of the bar.
- *
- * A transparent bottom border rather than none, so that the underline on the
- * current view adds no height and the four words sit on one line.
- */
-const VIEW_TAB =
-  "press rounded-sm border-b-2 border-transparent px-1.5 pb-0.5 text-[13px] text-ink-secondary hover:text-ink";
-
-/** The view being read now: underlined, and not a link to itself. */
-const VIEW_TAB_HERE =
-  "border-b-2 border-ink px-1.5 pb-0.5 text-[13px] text-ink";
 
 /**
  * Items describing the same place from different layers sit at the same
@@ -1280,122 +1266,57 @@ export function MapEditor({
           panelRef={marginPanelRef}
         />
 
-        {/* Two tiers, because the bar answers two questions and used to
-            answer both in one line of eight items at one weight: whose
-            project this is, and which way of reading it you are in.
-
-            The two links that are not places - out to the workspace, and the
-            project's settings - are the only ones reduced to marks. A name is
-            right for a destination and wrong for a door.
-
-            Right-bounded below md, short of the Panel button, and each row
-            scrolling sideways within those bounds: at 375px the old single
-            row measured 500px wide and ran clean off the screen. */}
-        <div className="absolute left-3 top-3 flex flex-col rounded-md border border-rule bg-card max-md:right-20">
-          <div className="flex items-center gap-3 px-3.5 py-2 max-md:gap-2 max-md:overflow-x-auto max-md:px-2.5 max-md:[&>*]:shrink-0">
-            <Link
-              href="/projects"
-              title="Workspace"
-              aria-label="Workspace"
-              className="press rounded-lg p-1 text-ink-secondary hover:text-ink"
-            >
-              <IconHome className="size-[18px]" />
-            </Link>
-
-            <span className="display max-w-[22ch] truncate whitespace-nowrap text-[15px] leading-tight">
-              {project.name}
-            </span>
-
-            {/* A hairline, so the gear reads as belonging to the name beside
-                it - this project's settings - rather than as a fifth view. */}
-            <span aria-hidden className="h-4 w-px bg-ink/15" />
-
-            <Link
-              href={`/projects/${project.id}/settings`}
-              title="Settings"
-              aria-label="Settings"
-              className="press rounded-lg p-1 text-ink-secondary hover:text-ink"
-            >
-              <IconSettings className="size-[18px]" />
-            </Link>
-
-            {/* The two controls that change what is on the screen rather than
-                where you are. Boxed, which is what separates them from the
-                marks and the name: the grouping is in their shape, not in
-                another hairline. `ml-auto` sends them to the far end whenever
-                the bar is given a width. */}
-            <button
-              onClick={() => setPreviewMode((p) => !p)}
-              aria-pressed={previewMode}
-              title="Show items as thumbnails with their titles in the margins"
-              className={`press ml-auto rounded-lg border px-2 py-1 text-[13px] font-medium ${
-                previewMode
-                  ? "border-ink bg-ink text-white"
-                  : "border-rule text-ink-secondary hover:bg-ink/[0.06]"
-              }`}
-            >
-              Gallery
-            </button>
-
-            <select
-              value={mapStyleId}
-              onChange={(e) => {
-                const next = e.target.value;
-                // Switch immediately, then record it. The map is the
-                // feedback, so it should not wait on a round trip; if the
-                // save fails the choice is simply not remembered for the
-                // published view, which the notice below says.
-                setMapStyleId(next);
-                void updateBaseMapStyleAction(next).then((result) => {
-                  setStyleSaveError(result?.error ?? null);
-                });
-              }}
-              aria-label="Base map style"
-              // Capped on a phone: it is the widest thing in the row and the
-              // least often reached for, so it is the one that gives way.
-              className="rounded-lg border border-rule bg-card px-2 py-1 text-[13px] outline-none focus:border-ink-muted max-md:max-w-[6.5rem]"
-            >
-              {MAP_STYLES.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.label}
-                </option>
-              ))}
-            </select>
-            {styleSaveError && (
-              <span className="text-[11px] text-red-600">
-                Shown here, but not saved for the published view.
-              </span>
-            )}
-          </div>
-
-          {/* The four ways of reading the same archive. Words, not marks:
-              these are places, and a place has a name.
-
-              Field comes first because it is the only one of the four opened
-              while standing in the street; the other three are read at a
-              desk. Map is named here for the first time - it used to be the
-              view you were simply left in, with nothing in the bar saying
-              so, which is what the underline now says. */}
-          <nav
-            aria-label="Views"
-            className="flex items-center gap-1 border-t border-rule px-3 py-1.5 max-md:overflow-x-auto max-md:[&>*]:shrink-0"
+        {/* Right-bounded below md, short of the Panel button, so that the
+            rows scroll sideways within those bounds instead of running off
+            the edge of the screen. */}
+        <ProjectBar
+          project={project}
+          view="map"
+          className="absolute left-3 top-3 rounded-md border border-rule max-md:right-20"
+        >
+          <button
+            onClick={() => setPreviewMode((p) => !p)}
+            aria-pressed={previewMode}
+            title="Show items as thumbnails with their titles in the margins"
+            className={`press rounded-lg border px-2 py-1 text-[13px] font-medium ${
+              previewMode
+                ? "border-ink bg-ink text-white"
+                : "border-rule text-ink-secondary hover:bg-ink/[0.06]"
+            }`}
           >
-            <Link href={`/projects/${project.id}/field`} className={VIEW_TAB}>
-              Field
-            </Link>
-            <span aria-current="page" className={VIEW_TAB_HERE}>
-              Map
+            Gallery
+          </button>
+
+          <select
+            value={mapStyleId}
+            onChange={(e) => {
+              const next = e.target.value;
+              // Switch immediately, then record it. The map is the feedback,
+              // so it should not wait on a round trip; if the save fails the
+              // choice is simply not remembered for the published view, which
+              // the notice below says.
+              setMapStyleId(next);
+              void updateBaseMapStyleAction(next).then((result) => {
+                setStyleSaveError(result?.error ?? null);
+              });
+            }}
+            aria-label="Base map style"
+            // Capped on a phone: it is the widest thing in the row and the
+            // least often reached for, so it is the one that gives way.
+            className="rounded-lg border border-rule bg-card px-2 py-1 text-[13px] outline-none focus:border-ink-muted max-md:max-w-[6.5rem]"
+          >
+            {MAP_STYLES.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.label}
+              </option>
+            ))}
+          </select>
+          {styleSaveError && (
+            <span className="text-[11px] text-red-600">
+              Shown here, but not saved for the published view.
             </span>
-            {/* The other view of the same archive: what has no coordinate,
-                and the connections between things. */}
-            <Link href={`/projects/${project.id}/board`} className={VIEW_TAB}>
-              Board
-            </Link>
-            <Link href={`/projects/${project.id}/threads`} className={VIEW_TAB}>
-              Threads
-            </Link>
-          </nav>
-        </div>
+          )}
+        </ProjectBar>
 
         {/* Bounded on the right as well, so that on a narrow screen the row of
             drawing tools scrolls sideways within the viewport instead of
