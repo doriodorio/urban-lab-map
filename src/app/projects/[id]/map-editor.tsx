@@ -51,6 +51,7 @@ import {
 import {
   MarginColumn,
   useMarginColumn,
+  useSheetAboveMargin,
   type MarginEntry,
 } from "@/components/margin-column";
 
@@ -473,6 +474,8 @@ export function MapEditor({
    * measures it so it can rest just above it, at whatever height it is.
    */
   const bottomToolsRef = useRef<HTMLDivElement | null>(null);
+  /** The margin strip itself, so the opening view can come to rest on it. */
+  const marginPanelRef = useRef<HTMLDivElement | null>(null);
   const markersRef = useRef<Map<string, maplibregl.Marker>>(new Map());
   // Set while a drag is in flight so the render effect doesn't yank the
   // marker back to its stored position mid-gesture.
@@ -1063,12 +1066,16 @@ export function MapEditor({
   // Pinned to the perimeter's edge whether or not the perimeter is drawn:
   // hiding the outline is a display preference, and it should not take the
   // sources off the screen with it.
+  const sheet = projectPerimeter(surveyedGeometries(items));
   const marginBox = useMarginColumn(
     mapRef,
     marginEntries,
-    projectPerimeter(surveyedGeometries(items)),
+    sheet,
     bottomToolsRef
   );
+  // And the sheet settles onto the strip as the project opens, so the two
+  // read as one page instead of as a frame with a panel under it.
+  useSheetAboveMargin(mapRef, sheet, marginBox, marginPanelRef);
 
   // Render line/polygon items.
   useEffect(() => {
@@ -1249,6 +1256,7 @@ export function MapEditor({
           selectedId={selectedItemId}
           onSelect={setSelectedItemId}
           boardHref={`/projects/${project.id}/board`}
+          panelRef={marginPanelRef}
         />
 
         {/* Right-bounded below md, short of the Panel button, and scrolling

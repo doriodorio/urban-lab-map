@@ -29,6 +29,7 @@ import {
 import {
   MarginColumn,
   useMarginColumn,
+  useSheetAboveMargin,
   type MarginEntry,
 } from "@/components/margin-column";
 import * as maplibregl from "maplibre-gl";
@@ -165,6 +166,8 @@ export function PublicViewer({
 }) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
+  /** The margin strip, which the opening view comes to rest on. */
+  const marginPanelRef = useRef<HTMLDivElement | null>(null);
   const markersRef = useRef<Map<string, maplibregl.Marker>>(new Map());
 
   // The brief makes the guided tour the default entry point, so a project
@@ -304,12 +307,14 @@ export function PublicViewer({
       title: item.title || "Untitled",
       color: layerColor(item.layer_id),
     }));
+  const sheet = projectPerimeter(surveyedGeometries(items));
   const marginBox = useMarginColumn(
     mapRef,
     marginEntries,
-    projectPerimeter(surveyedGeometries(items))
+    sheet
     // No drawing tools here - only the map's own attribution line to clear.
   );
+  useSheetAboveMargin(mapRef, sheet, marginBox, marginPanelRef);
 
   // Only the stages this project actually has anything for.
   const stages: { id: Stage; label: string }[] = [
@@ -661,6 +666,7 @@ export function PublicViewer({
             setMode("explore");
             setSelectedItemId(id);
           }}
+          panelRef={marginPanelRef}
         />
 
         <select

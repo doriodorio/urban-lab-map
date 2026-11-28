@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type * as maplibregl from "maplibre-gl";
 import type { PerimeterRing } from "@/lib/perimeter";
 import { useMapInstance } from "@/lib/map-ready";
@@ -156,19 +156,19 @@ export function useMarginColumn(
         // bottom line.
         //
         // It used to follow that line, on the argument that a margin belongs
-        // to the sheet it edges. That holds while the frame fills the view,
-        // which it does on a laptop after the view is fitted to the items -
-        // and there the two are the same place. It fails on a phone, where a
-        // wide perimeter fitted to a narrow screen leaves the frame's bottom
-        // line halfway up a tall canvas: the strip came to rest in the
-        // middle of the map, touching nothing, reading as a panel dropped
-        // over the territory rather than as a list beside it. That is the
-        // one reading this strip exists to prevent.
+        // to the sheet it edges. The argument is right; following the line
+        // was the wrong way to honour it. A fitted view centres the frame,
+        // so there is a band of map under it - 87 pixels on a laptop, 241 on
+        // a phone - and a strip that hangs from the line comes to rest in
+        // that band, touching nothing, reading as a panel dropped over the
+        // territory rather than as a list beside it.
         //
-        // So the sheet is the screen. The strip keeps the frame's width and
-        // sits on the bottom edge, above the drawing tools - which is where
-        // it already was in the common case, and somewhere defensible in
-        // every other.
+        // So the strip stays on the bottom edge, and the band is closed from
+        // the other end: the opening view brings the sheet down until its
+        // bottom line meets the strip (useSheetAboveMargin, below). In a
+        // fitted view the two are then the same place, which is what the
+        // argument wanted. Once the group pans away the line goes wherever
+        // they put it, and the strip stays where a reader can find it.
         setBox({
           left: clamp(sw ? sw.x : EDGE, EDGE, width - strip - EDGE),
           bottom: clearance,
@@ -189,6 +189,185 @@ export function useMarginColumn(
   }, [count, corners, map]);
 
   return map && count > 0 ? box : null;
+}
+
+/** Map left above the sheet's top line when it is brought down. */
+const HEAD_ROOM = 24;
+/** Paper between the sheet's bottom line and the strip under it. */
+const SHEET_GAP = 10;
+/** Below this, there is no room worth refitting a project into. */
+const MIN_SHEET = 160;
+/**
+ * How much of the sheet the strip may cover before the view gives way.
+ *
+ * The perimeter adds a tenth of the content's own size as a border
+ * (PADDING_RATIO in lib/perimeter.ts), so the bottom tenth of the frame is
+ * empty by construction: a strip resting on it covers margin, not material.
+ * Tolerating that much is not laziness. The strip is as wide as the frame,
+ * so taking the view out to clear it gives the strip a narrower column, its
+ * titles wrap onto another line, and it asks for the room again - chase the
+ * last pixel and a short window ends up with a small sheet above a tall
+ * block of sources. The overlap it stops at is invisible; that is not.
+ */
+const MARGIN_SHARE = 0.1;
+/** Measure-and-correct passes allowed before the view is left as it is. */
+const PASSES = 3;
+/**
+ * Milliseconds between one pass and the next measurement.
+ *
+ * Not a frame. A move of the camera reaches the strip through the map's own
+ * `move` event, which this file throttles to a frame, then through a React
+ * render, and only then is the strip laid out at its new width - so a pass
+ * that measures on the next frame reads the strip the move was meant to
+ * change, finds nothing to correct, and stops one correction short.
+ */
+const SETTLE_WAIT = 60;
+
+/**
+ * Brings the sheet down to meet its margin, once, as the project opens.
+ *
+ * `fitBounds` centres what it is given, so a project that does not happen to
+ * share the window's proportions opens with a band of empty map under its
+ * frame - and the strip of unplaced sources sits below that band, on the foot
+ * of the canvas, reading as a thing of its own rather than as the frame's
+ * footer. Both halves of the record are on screen and nothing says they
+ * belong to each other.
+ *
+ * The fix is the camera, not a different strip. The view drops until the
+ * frame's bottom line rests just above the strip, which costs nothing - the
+ * map above the sheet is the rest of the city, which is context; the map
+ * below it was the gap this closes.
+ *
+ * A frame that already reaches past the strip is refitted first, with the
+ * strip's own room held back, so it is the view that gives way rather than
+ * the sources being covered by it. That is a zoom out and never a zoom in:
+ * the opening fit stops at street level on purpose, and nothing here may
+ * push past it.
+ *
+ * Taking the view out moves the thing being aimed at, which is why this
+ * settles over a few frames rather than in one. The strip is as wide as the
+ * frame, so a wider view gives it a narrower strip, the titles wrap onto one
+ * more line, and its top edge rises by a row - a single pass lands the sheet
+ * about 25 pixels low and the strip covers the corner of it. Each pass
+ * re-measures and the correction shrinks; three is enough, and the loop stops
+ * as soon as the two edges are within a pixel or two of each other.
+ *
+ * Two things keep it from being a nuisance:
+ *
+ *   * It never drops further than the room above the sheet, so bringing the
+ *     bottom edge in cannot push the top edge out.
+ *   * It runs once, and not at all after the group has touched the map. The
+ *     camera belongs to them from their first drag; a view that re-seats
+ *     itself later is a view nobody can aim.
+ */
+export function useSheetAboveMargin(
+  mapRef: { current: maplibregl.Map | null },
+  perimeter: PerimeterRing | null,
+  box: MarginBox | null,
+  panelRef: { current: HTMLElement | null }
+) {
+  const map = useMapInstance(mapRef);
+  const settled = useRef(false);
+  const touched = useRef(false);
+  /**
+   * The pass in flight, held outside the effect that started it.
+   *
+   * Each move the settling makes re-renders the strip, which re-runs that
+   * effect, and an effect's cleanup would cancel the very pass that is
+   * waiting to measure the result. Only leaving the page stops it.
+   */
+  const pending = useRef(0);
+
+  useEffect(() => () => clearTimeout(pending.current), []);
+
+  const corners = perimeter
+    ? `${perimeter[1][0]},${perimeter[1][1]}|${perimeter[2][0]},${perimeter[2][1]}`
+    : "";
+
+  // Only a real gesture counts. Our own jumps and the camera moves that
+  // follow a search result arrive with no originalEvent, and neither is the
+  // group saying where they want to be looking.
+  useEffect(() => {
+    if (!map) return;
+    const mark = (event: { originalEvent?: unknown }) => {
+      if (event.originalEvent) touched.current = true;
+    };
+    map.on("movestart", mark);
+    return () => {
+      map.off("movestart", mark);
+    };
+  }, [map]);
+
+  useEffect(() => {
+    const panel = panelRef.current;
+    if (!map || !perimeter || !box || !panel) return;
+    if (settled.current || touched.current) return;
+
+    // Claimed before the first measurement, not after the last: every move
+    // below re-renders the strip and re-runs this effect, and a settling
+    // that restarts itself never finishes.
+    settled.current = true;
+
+    let pass = 0;
+
+    // Each pass measures a strip the browser has had time to lay out at the
+    // width the pass before it left behind.
+    const step = () => {
+      const canvas = map.getCanvas().getBoundingClientRect();
+      // Where the sheet's bottom line is being brought to: just clear of the
+      // strip's own top edge, wherever the line-breaking put it.
+      const want = panel.getBoundingClientRect().top - canvas.top - SHEET_GAP;
+
+      // Almost nothing left above the strip - a short window with a long
+      // list of sources. Rearranging the view around a sliver would be
+      // worse than leaving it alone.
+      if (want < HEAD_ROOM + MIN_SHEET) return;
+
+      const foot = map.project(perimeter[1]).y;
+      const head = map.project(perimeter[2]).y;
+      const off = want - foot;
+      // Covering the frame's own bottom margin is allowed; covering what is
+      // inside it is not.
+      const spare = Math.max(0, foot - head) * MARGIN_SHARE;
+      if (pass >= PASSES) return;
+      if (off < 2 && off > -spare) return;
+      pass += 1;
+
+      // The sheet reaches past the strip by more than its margin: it is the
+      // view that gives way.
+      if (off < 0) {
+        map.fitBounds([perimeter[0], perimeter[2]], {
+          padding: {
+            top: HEAD_ROOM,
+            bottom: canvas.height - want,
+            left: HEAD_ROOM,
+            right: HEAD_ROOM,
+          },
+          duration: 0,
+        });
+        pending.current = window.setTimeout(step, SETTLE_WAIT);
+        return;
+      }
+
+      // Room to spare under it: bring it down, as far as the map above it
+      // allows. Expressed as a new centre rather than a pan by pixels - the
+      // point `drop` above the middle becomes the middle, so everything,
+      // the sheet with it, moves down by exactly that much.
+      const drop = Math.min(off, Math.max(0, head - HEAD_ROOM));
+      if (drop < 1) return;
+      map.jumpTo({
+        center: map.unproject([canvas.width / 2, canvas.height / 2 - drop]),
+      });
+      // A pan leaves the frame the width it was, so the strip wraps the same
+      // way and there is nothing left to correct unless the headroom cut the
+      // drop short - in which case there is nothing to be done either.
+      if (drop < off - 1) return;
+      pending.current = window.setTimeout(step, SETTLE_WAIT);
+    };
+
+    pending.current = window.setTimeout(step, 0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [map, corners, box]);
 }
 
 /**
@@ -218,11 +397,19 @@ export function MarginColumn({
   selectedId,
   onSelect,
   boardHref,
+  panelRef,
 }: {
   box: MarginBox | null;
   entries: MarginEntry[];
   selectedId?: string | null;
   onSelect: (id: string) => void;
+  /**
+   * The strip's own element, for whoever needs to know how tall it came out.
+   *
+   * It wraps, so its height is a fact about the browser's line-breaking, not
+   * something this file can work out - and the opening view has to clear it.
+   */
+  panelRef?: React.Ref<HTMLDivElement>;
   /**
    * Where this strip leads, when it leads anywhere.
    *
@@ -239,6 +426,7 @@ export function MarginColumn({
   return (
     <div className="pointer-events-none absolute inset-0 z-10">
       <div
+        ref={panelRef}
         style={{ left: box.left, bottom: box.bottom, width: box.width }}
         className="pointer-events-auto absolute flex flex-row-reverse flex-wrap items-center gap-x-5 gap-y-1 rounded-t-md border border-rule bg-paper/95 px-2 py-2 shadow-sm backdrop-blur-[2px]"
       >
