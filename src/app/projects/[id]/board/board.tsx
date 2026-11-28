@@ -620,22 +620,34 @@ export function Board({
         project={{ id: projectId, name: projectName }}
         view="board"
         className="z-20 shrink-0 border-b border-rule"
-      >
+      />
+
+      {/* The two ways of putting something on the board, at the foot of it -
+          the corner where the map keeps the answer to the same question.
+
+          Outside the surface rather than inside it, which is not only about
+          where it looks right: the surface pans on any pointer that reaches
+          it, so a toolbar sitting in it would drag the board every time
+          somebody pressed a button. */}
+      <div className="absolute bottom-3 left-3 z-10 flex items-center gap-1.5 rounded-md border border-rule bg-card p-1.5">
         <button
           type="button"
           onClick={() => setComposing(true)}
-          className="press rounded-lg bg-ink px-3 py-1.5 text-[13px] font-medium text-paper"
+          className="press rounded-xl bg-ink px-3.5 py-1.5 text-[13px] font-medium text-paper"
         >
           New card
         </button>
         <button
           type="button"
           onClick={() => setPicking(true)}
-          className="press rounded-lg border border-rule px-3 py-1.5 text-[13px]"
+          className="press rounded-xl px-3 py-1.5 text-[13px] text-ink-secondary hover:text-ink"
         >
-          From the map ({offBoard.length})
+          From the map
+          <span className="ml-1.5 tabular-nums opacity-60">
+            {offBoard.length}
+          </span>
         </button>
-      </ProjectBar>
+      </div>
 
       {(error ?? notice) && (
         <button
