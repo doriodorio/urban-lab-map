@@ -55,12 +55,91 @@ export function IconConnect(props: IconProps) {
   );
 }
 
+/**
+ * A pin: a point on the map.
+ *
+ * One drawing behind every button that means "a place" - opening an item
+ * where it was found, and dropping a new point. Shared rather than copied so
+ * the two cannot drift into looking like different ideas.
+ */
+function Pin() {
+  return (
+    <>
+      <path d="M12 21s6.25-5.8 6.25-10.5a6.25 6.25 0 1 0-12.5 0C5.75 15.2 12 21 12 21Z" />
+      <circle cx="12" cy="10.5" r="2.25" />
+    </>
+  );
+}
+
 /** Open this item where it was found. */
 export function IconOnMap(props: IconProps) {
   return (
     <Svg {...props}>
-      <path d="M12 21s6.25-5.8 6.25-10.5a6.25 6.25 0 1 0-12.5 0C5.75 15.2 12 21 12 21Z" />
-      <circle cx="12" cy="10.5" r="2.25" />
+      <Pin />
+    </Svg>
+  );
+}
+
+/** Put a point on the map by clicking it. */
+export function IconPoint(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <Pin />
+    </Svg>
+  );
+}
+
+/**
+ * Here: ask the device where it is.
+ *
+ * A crosshair, which is what every map on a phone uses for the same thing -
+ * the one mark in this set that a student arrives already knowing.
+ */
+export function IconHere(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <circle cx="12" cy="12" r="6" />
+      <circle cx="12" cy="12" r="1.6" />
+      <path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21" />
+    </Svg>
+  );
+}
+
+/**
+ * No place: a source that was not found anywhere.
+ *
+ * The same pin, struck through. An article about a street was not written on
+ * it, and this is the answer that says so - so it is drawn as the opposite
+ * of the pin rather than as an unrelated mark.
+ */
+export function IconNoPlace(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <Pin />
+      <path d="M4.5 20 20 4.5" />
+    </Svg>
+  );
+}
+
+/** Draw a route: a line with its points. */
+export function IconLine(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="m5.8 16.8 4-7 4.4 3.4 3.9-6.6" />
+      <circle cx="4.75" cy="18.6" r="1.75" />
+      <circle cx="19.25" cy="5.4" r="1.75" />
+    </Svg>
+  );
+}
+
+/** Draw an area: a closed shape with its corners. */
+export function IconRegion(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M12 4.2 19.3 9.6 16.5 18.4h-9L4.7 9.6Z" />
+      <circle cx="12" cy="4.2" r="1.5" fill="var(--card)" />
+      <circle cx="19.3" cy="9.6" r="1.5" fill="var(--card)" />
+      <circle cx="4.7" cy="9.6" r="1.5" fill="var(--card)" />
     </Svg>
   );
 }

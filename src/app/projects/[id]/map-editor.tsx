@@ -8,6 +8,13 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import { preparePhoto } from "./photo-import";
 import { toVideoEmbed, linkHost } from "@/lib/embed";
 import {
+  IconPoint,
+  IconHere,
+  IconNoPlace,
+  IconLine,
+  IconRegion,
+} from "@/components/icons";
+import {
   CATEGORIES,
   defaultCategory,
   itemCategory,
@@ -1374,7 +1381,8 @@ export function MapEditor({
               reader is not made to walk past the rare tools to find them. */}
           <div className="flex max-w-full items-center gap-1 overflow-x-auto rounded-md border border-rule bg-card p-1.5">
             <DrawTool
-              label="Point"
+              label="Point — click the map to place it"
+              icon={<IconPoint className="size-[18px]" />}
               active={drawMode === "point"}
               onClick={() => toggleDrawMode("point")}
             />
@@ -1384,12 +1392,15 @@ export function MapEditor({
                 one tool whose answer is a measurement rather than a guess at
                 where you are on a map. */}
             <DrawTool
-              label={locating ? "Locating…" : "Here"}
+              label={locating ? "Locating…" : "Here — use where this device is"}
+              icon={<IconHere className="size-[18px]" />}
               active={locating}
+              busy={locating}
               onClick={locate}
             />
             <DrawTool
-              label="No place"
+              label="No place — a source that was not found anywhere"
+              icon={<IconNoPlace className="size-[18px]" />}
               active={composingSource}
               onClick={() => {
                 setDrawMode(null);
@@ -1398,12 +1409,14 @@ export function MapEditor({
             />
             <span className="mx-1 h-5 w-px bg-rule" />
             <DrawTool
-              label="Line"
+              label="Line — draw a route"
+              icon={<IconLine className="size-[18px]" />}
               active={drawMode === "line"}
               onClick={() => toggleDrawMode("line")}
             />
             <DrawTool
-              label="Region"
+              label="Region — draw an area"
+              icon={<IconRegion className="size-[18px]" />}
               active={drawMode === "polygon"}
               onClick={() => toggleDrawMode("polygon")}
             />
@@ -2164,26 +2177,42 @@ function EmbeddedLinkBody({ url }: { url: string }) {
   );
 }
 
+/**
+ * One of the five answers to "where does this go?".
+ *
+ * A mark rather than a word. Five labelled pills sat above the map as the
+ * loudest thing on the screen, competing with the material they are used to
+ * file - and the row had to be scrolled sideways on a phone.
+ *
+ * The words stay in `title` and `aria-label`, and the hint beside the
+ * toolbar still names what the chosen tool expects. `aria-pressed` is what
+ * makes the dark square mean "this one is on" to a reader who cannot see
+ * it.
+ */
 function DrawTool({
   label,
+  icon,
   active,
+  busy = false,
   onClick,
 }: {
   label: string;
+  icon: React.ReactNode;
   active: boolean;
+  busy?: boolean;
   onClick: () => void;
 }) {
   return (
     <button
       onClick={onClick}
       aria-pressed={active}
-      className={`press rounded-xl px-3.5 py-1.5 text-[13px] font-medium ${
-        active
-          ? "bg-ink text-white"
-          : "text-ink hover:bg-ink/[0.06]"
-      }`}
+      title={label}
+      aria-label={label}
+      className={`press grid size-10 shrink-0 place-items-center rounded-xl ${
+        active ? "bg-ink text-white" : "text-ink hover:bg-ink/[0.06]"
+      } ${busy ? "animate-pulse" : ""}`}
     >
-      {label}
+      {icon}
     </button>
   );
 }
